@@ -55,16 +55,11 @@ func (m *model) getNext() {
 func (m *model) putBlock(cs string) bool {
 	c := 0
 	switch cs {
-	case "1":
-		c = 0
-	case "2":
-		c = 1
-	case "3":
-		c = 2
-	case "4":
-		c = 3
-	case "5":
-		c = 4
+	case "1": c = 0
+	case "2": c = 1
+	case "3": c = 2
+	case "4": c = 3
+	case "5": c = 4
 	default:
 		return false
 	}
@@ -78,6 +73,11 @@ func (m *model) putBlock(cs string) bool {
 	m.nextRow[c] += 1
 	m.moves += 1
 
+	// TODO: Move this to Update instead.
+	// It will return a tick, that does more collapsing
+	// In collapse, update a `m.multi` and/or collapse-area info
+	// for View to display.
+	// Interval something around 500ms
 	for m.collapse(m.nextRow[c]-1, c) {
 	}
 
@@ -86,6 +86,7 @@ func (m *model) putBlock(cs string) bool {
 
 func (m *model) collapse(r int, c int) bool {
 	this := m.columns[c][r]
+
 	var up block
 	if (r > 0) {
 		up = m.columns[c][r-1]
@@ -114,9 +115,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "q":
-			m.msg = "byee"
-			return m, tea.Quit
 		case "1", "2", "3", "4", "5":
 			if m.putBlock(msg.String()) {
 				m.getNext()
@@ -127,6 +125,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, tea.Quit
 				}
 			}
+		case "ctrl+c", "q":
+			m.msg = "byee"
+			return m, tea.Quit
 		default:
 			m.msg = "what"
 		}
@@ -143,6 +144,9 @@ func (m model) View() (s string) {
 	}
 	s += "\n"
 
+	// TODO: Unicode column chars
+	// Top and bottom row padding
+	// [background] colors
 	for r := 0; r < ROWS; r += 1 {
 		for c := 0; c < COLS; c += 1 {
 			block := m.columns[c][r]
