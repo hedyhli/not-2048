@@ -121,8 +121,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.msg = ""
 
 				if m.total == COLS * ROWS {
-					m.msg = "lol try harder next time"
-					return m, tea.Quit
+					end := true
+					for c := 0; c < COLS; c += 1 {
+						if m.columns[c][ROWS-1] == m.next {
+							end = false
+							break
+						}
+					}
+					if end {
+						m.msg = "lol try harder next time"
+						return m, tea.Quit
+					}
 				}
 			}
 		case "ctrl+c", "q":
@@ -161,6 +170,7 @@ func (m model) View() (s string) {
 	s += m.msg + "\n\n"
 	s += fmt.Sprintf("moves: %d\n\n", m.moves)
 	s += fmt.Sprintf(" [[ %d ]] %d", m.next, m.peek)
+	s += "\n\n"
 
 	return
 }
