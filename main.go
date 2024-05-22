@@ -17,7 +17,7 @@ type block int
 type model struct {
 	moves int
 	/// List of columns
-	columns [COLS][ROWS]block
+	columns [COLS][ROWS+1]block
 	/// Index of next row in each column
 	nextRow [COLS]int
 	/// Current max rows of the columns
@@ -32,7 +32,7 @@ type model struct {
 }
 
 func initial() model {
-	var columns [COLS][ROWS]block;
+	var columns [COLS][ROWS+1]block;
 	return model{
 		moves: 0,
 		columns: columns,
@@ -64,7 +64,7 @@ func (m *model) putBlock(cs string) bool {
 		return false
 	}
 
-	if m.nextRow[c] == ROWS {
+	if m.nextRow[c] == ROWS && m.columns[c][m.nextRow[c]-1] != m.next {
 		m.msg = "naughty :/"
 		return false
 	}
