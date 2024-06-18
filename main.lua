@@ -71,7 +71,11 @@ function love.draw()
             love.graphics.setColor(1, 1, 1)
             if Grid[y][x] > 0 then
                 Count = Count + 1
-                love.graphics.print(tostring(Grid[y][x]), col + tile_padding[1], row + tile_padding[2])
+                love.graphics.print(
+                    tostring(Grid[y][x]),
+                    col + tile_padding[1],
+                    row + tile_padding[2]
+                )
             end
             col = col + tile_width + 10
         end
