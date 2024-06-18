@@ -7,6 +7,8 @@ function love.load()
     GridTops = {}
     Next = 2
     Max = 2
+    Count = 0
+    State = "begin"
     for y = 1, ROWS do
         Grid[y] = {}
         GridTops[y] = 1
@@ -48,6 +50,7 @@ function love.draw()
     local tile_padding = {15, math.floor(tile_width / 2 - 15)}
 
     local row = 10
+    Count = 0
     for y = 1, ROWS do
         local col = 10
         for x = 1, ROWS do
@@ -55,12 +58,19 @@ function love.draw()
             love.graphics.rectangle('fill', col, row, tile_width, tile_width)
             love.graphics.setColor(1, 1, 1)
             if Grid[y][x] > 0 then
+                Count = Count + 1
                 love.graphics.print(tostring(Grid[y][x]), col + tile_padding[1], row + tile_padding[2])
             end
             col = col + tile_width + 10
         end
         row = row + tile_width + 10
     end
+
+    if Count == ROWS ^ 2 then
+        State = "end"
+        Message = "GAME OVER"
+    end
+
     love.graphics.setColor(1, 1, 1)
     local col = 10
     for x = 1, ROWS do
@@ -77,6 +87,10 @@ function love.draw()
 end
 
 function love.keypressed(key)
+    if State == "end" then
+        Message = "Game is already over. Get over it!"
+        return
+    end
     local col = tonumber(key)
     if col and col > 0 and col <= ROWS then
         local row = GridTops[col]
