@@ -3,9 +3,10 @@ function love.load()
     ROWS = 5
     Message = "Press a number key 1 to 5"
     Grid = {}
-    --- @type number[] Next index for insertion
+    --- @type number[] Next index for insertion, actually index by x.
     GridTops = {}
     Next = 2
+    Max = 2
     for y = 1, ROWS do
         Grid[y] = {}
         GridTops[y] = 1
@@ -13,10 +14,36 @@ function love.load()
             Grid[y][x] = 0
         end
     end
+
+    --- Check for collapse at new insertion position. New tile is at Grid[y][x]
+    --- @param x number
+    --- @param y number
+    function Collapse(x, y)
+        local this = Grid[y][x]
+        while y > 1 do
+            local up = Grid[y-1][x]
+            if up == this then
+                this = up + this
+                Max = math.max(Max, this)
+                Grid[y-1][x] = this
+                Grid[y][x] = 0
+                GridTops[x] = GridTops[x] - 1
+                y = y - 1
+            else
+                break
+            end
+        end
+    end
+
+    function UpdateNext()
+        if Max > 4 then
+            Next = 2 ^ math.random(math.log(Max, 2) - 1)
+        end
+    end
 end
 
 function love.draw()
-    local tile_width = 95
+    local tile_width = 90
     local tile_color = {54/256, 58/256, 78/256}
     local tile_padding = {15, math.floor(tile_width / 2 - 15)}
 
@@ -34,6 +61,13 @@ function love.draw()
         end
         row = row + tile_width + 10
     end
+    love.graphics.setColor(1, 1, 1)
+    local col = 10
+    for x = 1, ROWS do
+        love.graphics.print(tostring(GridTops[x]), col, row)
+        col = col + tile_width + 10
+    end
+    row = row + 20
 
     love.graphics.setColor(1, 1, 1)
     row = row + 10
@@ -49,6 +83,8 @@ function love.keypressed(key)
         if row <= ROWS then
             Grid[row][col] = Next
             GridTops[col] = row + 1
+            Collapse(col, row)
+            UpdateNext()
             Message = "Yay"
         else
             Message = "Row is full!"
