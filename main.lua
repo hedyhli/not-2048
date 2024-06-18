@@ -9,6 +9,19 @@ function love.load()
     Max = 2
     Count = 0
     State = "begin"
+    NextMap = {
+        [2] = 2,
+        [4] = 2,
+        [8] = 2,
+        [16] = 4,
+        [32] = 8,
+        [64] = 8,
+        [128] = 16,
+        [256] = 32,
+        [512] = 64,
+        [1024] = 64,
+    }
+    NextTooHigh = 64
     for y = 1, ROWS do
         Grid[y] = {}
         GridTops[y] = 1
@@ -38,9 +51,8 @@ function love.load()
     end
 
     function UpdateNext()
-        if Max > 4 then
-            Next = 2 ^ math.random(math.log(Max, 2) - 1)
-        end
+        local cap = NextMap[Max] or NextTooHigh
+        Next = 2 ^ math.random(math.log(cap))
     end
 end
 
