@@ -87,7 +87,14 @@ function love.keypressed(key)
             UpdateNext()
             Message = "Yay"
         else
-            Message = "Row is full!"
+            if Grid[ROWS][col] == Next then
+                Grid[ROWS][col] = Next * 2
+                Collapse(col, ROWS)
+                UpdateNext()
+                Message = "Phew!"
+            else
+                Message = "Row is full and incollapsible!"
+            end
         end
     else
         Message = "Invalid key"
