@@ -87,9 +87,45 @@ func (m *model) putBlock(cs string) bool {
 func (m *model) collapse(r int, c int) bool {
 	this := m.columns[c][r]
 
-	var up block
+	var up, left, right block
 	if (r > 0) {
 		up = m.columns[c][r-1]
+	}
+	if (c > 0) {
+		left = m.columns[c-1][r]
+	}
+	if (c < COLS-1) {
+		right = m.columns[c+1][r]
+	}
+
+	// Callapse sideways
+	if (left == this && right == this) {
+		// 4 8 4  r-1
+		// 2 2 2  r
+		// 8   4  r+1
+		//
+		// 4 8 4
+		// 8 8 4
+		//
+		// 4 32 8?
+		// TODO
+		m.total -= 2
+		// 2 2 2 => 8
+		// 4 4 4 => 16
+		// ...
+		m.columns[c][r] = this << 2
+
+		// left disappears
+		for i := r; i < COLS; i += 1 {
+			m.columns[c-1][i] = m.columns[c-1][i+1];
+		}
+		m.nextRow[c-1] -= 1;
+		// right disappears
+		for i := r; i < COLS; i += 1 {
+			m.columns[c+1][i] = m.columns[c+1][i+1];
+		}
+		m.nextRow[c+1] -= 1;
+		// Collapse left
 	}
 
 	// Collapse up
