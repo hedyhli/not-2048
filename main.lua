@@ -1,23 +1,34 @@
 function love.load()
     Font = love.graphics.newFont("IBM_Plex_Sans/Regular.ttf", 20)
-    BoldFont = love.graphics.newFont("IBM_Plex_Sans/Medium.ttf", 26)
-    BoldFontHeight = BoldFont:getHeight()
-    love.graphics.setFont(Font)
     FontHeight = Font:getHeight()
-    ROWS = 5
-    Message = "Press a number key 1 to 5"
-    ---@alias rgb number[]
-    Next = 2
-    Max = 2
-    Count = 0
-    State = "begin"
 
+    TileFont = love.graphics.newFont("IBM_Plex_Sans/Medium.ttf", 26)
+    TileFontHeight = TileFont:getHeight()
+
+    love.graphics.setFont(Font)
+
+    -- Game Params
+    ROWS = 5
+    ---@alias tile integer Positive power of 2
+    ---@type tile
+    Next = 2
+    ---@type tile
+    Max = 2
+
+    Message = "Press a number key 1 to 5"
+    ---@type "begin"|"animating"|"end"
+    State = "begin"
+    Count = 0
+
+    ---@alias rgb number[]
     ---@alias hex string
     ---@alias colorInfo {bg: rgb, fg: rgb}
-    ---{ HEX, is-fg? }
-    ---@type { [number]: colorInfo }
+    ---@type { [tile]: colorInfo }
     ColorPalette = {}
-    ---@type { [number]: {bg: hex, fg: boolean} }
+    ---`{ HEX, is-fg? }`
+    ---Interminably disappointed at love to use... not HEX, not even 256 integers,
+    ---but *floating point* RGB for colors!
+    ---@type { [tile]: {bg: hex, fg: boolean} }
     local color_tmp = {
         [2]   = {bg = "473335", fg = true},
         [4]   = {bg = "4E5D5E", fg = true},
@@ -30,7 +41,6 @@ function love.load()
         [512] = {bg = "C996B3", fg = false},
         [1024] = {bg = "C95270", fg = true},
     }
-    FallbackColor = {bg = {1, 1, 1}, fg = {0, 0, 0}}
     -- Convert hex to rgb
     for k, v in pairs(color_tmp) do
         ---@type rgb
@@ -49,8 +59,13 @@ function love.load()
     end
     ---@type colorInfo
     ColumnColor = {bg = {34/256, 33/256, 35/256}, fg = {1, 1, 1}}
+    ---For tiles larger than the maximum defined tile
+    ---@type colorInfo
+    FallbackColor = {bg = {1, 1, 1}, fg = {0, 0, 0}}
 
-    ---@type { [number]: number }
+    ---Map of `Max` number to what the maximum `Next` allowed when producing
+    ---the random `Next`. The maximum `Next` is inclusive.
+    ---@type {[tile|"fallback"]: tile}
     NextMap = {
         [2] = 2,
         [4] = 2,
@@ -62,12 +77,16 @@ function love.load()
         [256] = 32,
         [512] = 64,
         [1024] = 64,
+        fallback = 64
     }
-    NextTooHigh = 64
 
+    ---@type number[][]
     Grid = {}
-    ---@type number[] Next index for insertion, actually index by x.
+    ---@type number[] The next index used for insertion.
+    ---`GridTops[col]` is the row number of the next item inserted into `col`.
     GridTops = {}
+    ---@type boolean[][] `GridAnim[row][col]` Indicates whether tile at `row`
+    ---and `col` is currently in animation. Refer to `AnimSlideBegin`.
     GridAnim = {}
     for y = 1, ROWS do
         Grid[y] = {}
@@ -78,12 +97,17 @@ function love.load()
             GridAnim[y][x] = false
         end
     end
+    ---@type number Understood as animation frame, used as the row of the tile
+    ---to be placed, which is currently in vertical animation. See `love.draw`
     AnimSlideRow = -1
+    ---@alias tileCoords {row: integer, col: integer}
+    ---@type tileCoords
+    ---The coordinates of the current tile in sliding animation (insertion).
     AnimSlide = {row = 0, col = 0}
 
-    --- Check for collapse at new insertion position. New tile is at Grid[y][x]
-    --- @param x number
-    --- @param y number
+    --- Check for collapse at new insertion position. Newly inserted tile at `Grid[y][x]`
+    --- @param x integer
+    --- @param y integer
     function Collapse(x, y)
         local this = Grid[y][x]
         while y > 1 do
@@ -102,8 +126,10 @@ function love.load()
     end
 
     function UpdateNext()
-        local cap = NextMap[Max] or NextTooHigh
+        ---@type tile
+        local cap = NextMap[Max] or NextMap.fallback
         Next = 2 ^ math.random(math.log(cap))
+        -- INFO: Use this for quickly producing large tiles for debugging.
         -- Next = cap
     end
 
@@ -120,31 +146,55 @@ function love.load()
 
     function AnimSlideEnd()
         local row, col = AnimSlide.row, AnimSlide.col
+        AnimSlide.row, AnimSlide.col = 0, 0
         GridAnim[row][col] = false
         AnimSlideRow = -1
-        Collapse(col, row)
+        -- HACK: Not sensibly resetting to previous values
         State = "begin"
         Message = "Yay"
+        -- Motion of whatever collapsing of tiles must be done after the tile
+        -- in question finishes making their animated entrance.
+        Collapse(col, row)
     end
 end
 
 function love.update(_)
-    if AnimSlideRow >= 0 then
+    if State == "animating" then
         AnimSlideNext()
     end
 end
 
 function love.draw()
     local tile_width = 90
-    local tile_padding_top = math.floor(tile_width / 2 - BoldFontHeight / 2)
+    local tile_padding_top = math.floor(tile_width / 2 - TileFontHeight / 2)
+    -- I do not miss CSS flexbox
     local tile_gap = 10
     local radius = tile_width / 8
 
-    local bot_row = (ROWS - 1) * (tile_gap + tile_width)
-    local has_anim = false
-    local anim = {row = 0, col = 0, value = "", bg = {}, fg = {}}
+    ---Draw a single tile with the correct background and text.
+    ---@param tr integer Grid\[`tr`\][tc]
+    ---@param tc integer Grid[tr]\[`tc`\]
+    ---@param row integer Draws at `row + tile_padding_top`
+    ---@param col integer Where to draw
+    local function draw_tile(tr, tc, row, col)
+        local fg = (ColorPalette[Grid[tr][tc]] or FallbackColor).fg
+        local bg = (ColorPalette[Grid[tr][tc]] or FallbackColor).bg
 
-    -- Columns
+        love.graphics.setColor(unpack(bg))
+        love.graphics.rectangle("fill", col, row, tile_width, tile_width, radius)
+
+        row = row + tile_padding_top
+        love.graphics.setColor(unpack(fg))
+        love.graphics.printf(tostring(Grid[tr][tc]), TileFont, col, row, tile_width, "center")
+    end
+
+    ---Top left y coordinate
+    local bot_row = (ROWS - 1) * (tile_gap + tile_width)
+    ---@type {row: integer, col: integer, tc: integer, tr: integer}?
+    local anim = nil
+
+    --[[ Columns ]]--
+
     love.graphics.setColor(unpack(ColumnColor.bg))
     for y = 1, ROWS do
         love.graphics.rectangle(
@@ -157,46 +207,31 @@ function love.draw()
         )
     end
 
-    -- Grid
-    local row = tile_gap
-    Count = 0
-    for y = 1, ROWS do
-        local col = tile_gap
-        for x = 1, ROWS do
-            local fg = (ColorPalette[Grid[y][x]] or FallbackColor).fg
-            local bg = (ColorPalette[Grid[y][x]] or FallbackColor).bg
+    --[[ Grid ]]--
 
-            if GridAnim[y][x] then
-                anim = {
-                    row = bot_row - AnimSlideRow,
-                    col = col,
-                    value = tostring(Grid[y][x]),
-                    bg = bg,
-                    fg = fg,
-                }
+    local row = tile_gap
+    ---Number of occupied cells to determine whether game is over.
+    Count = 0
+    for tr = 1, ROWS do
+        local col = tile_gap
+        for tc = 1, ROWS do
+            -- Draw the tile in animation after everything else to put it on
+            -- the topmost layer.
+            if GridAnim[tr][tc] then
+                anim = { row = bot_row - AnimSlideRow, col = col, tr = tr, tc = tc }
                 if anim.row < row then
+                    anim = nil
                     AnimSlideEnd()
                 else
-                    has_anim = true
                     goto continue
                 end
             end
 
-            if Grid[y][x] > 0 then
+            if Grid[tr][tc] > 0 then
                 Count = Count + 1
-                love.graphics.setColor(unpack(bg))
-                love.graphics.rectangle('fill', col, row, tile_width, tile_width, radius)
-
-                love.graphics.setColor(unpack(fg))
-                love.graphics.printf(
-                    tostring(Grid[y][x]),
-                    BoldFont,
-                    col,
-                    row + tile_padding_top,
-                    tile_width,
-                    "center"
-                )
+                draw_tile(tr, tc, row, col)
             end
+
             ::continue::
             col = col + tile_width + tile_gap
         end
@@ -224,11 +259,8 @@ function love.draw()
     love.graphics.print(Message, 10, row)
 
     -- Animating tile must be above all others
-    if has_anim then
-        love.graphics.setColor(unpack(anim.bg))
-        love.graphics.rectangle('fill', anim.col, anim.row, tile_width, tile_width, radius)
-        love.graphics.setColor(unpack(anim.fg))
-        love.graphics.printf(anim.value, BoldFont, anim.col, anim.row + tile_padding_top, tile_width, "center")
+    if anim then
+        draw_tile(anim.tr, anim.tc, anim.row, anim.col)
     end
 end
 
@@ -248,6 +280,7 @@ function love.keypressed(key)
             Grid[row][col] = Next
             GridTops[col] = row + 1
             UpdateNext()
+            -- Defers collapsing to after animation finishes. See `AnimSlideEnd`.
             AnimSlideBegin(row, col)
             Message = "Yay"
         else
@@ -261,6 +294,6 @@ function love.keypressed(key)
             end
         end
     else
-        Message = "Invalid key"
+        Message = "Invalid key lol, try harder"
     end
 end
