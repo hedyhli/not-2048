@@ -14,6 +14,19 @@ function love.load()
     Next = 2
     ---@type tile
     Max = 2
+    TileWidth = 90
+    TileGap = 10
+
+    ---Computed
+    Columns = {
+        top = TileGap,
+        bot = ROWS * (TileGap + TileWidth),
+        cols = {}
+    }
+    for y = 1, ROWS do
+        local col_end = y * (TileGap + TileWidth)
+        Columns.cols[y] = {col_end - TileWidth, col_end}
+    end
 
     Message = "Press a number key 1 to 5"
     ---@type "begin"|"animating"|"end"
@@ -157,6 +170,37 @@ function love.load()
         Collapse(col, row)
         UpdateNext()
     end
+
+    ---@param col integer
+    function InsertTileAt(col)
+        if State == "end" then
+            Message = "Game is already over. Get over it!"
+            return
+        end
+        if State == "animating" then
+            Message = "Please wait for animation to finish"
+            return
+        end
+
+        local row = GridTops[col]
+        if row <= ROWS then
+            Grid[row][col] = Next
+            GridTops[col] = row + 1
+            -- Defers collapsing & updating next to after animation finishes.
+            -- See `AnimSlideEnd`.
+            AnimSlideBegin(row, col)
+            Message = "Yay"
+        else
+            if Grid[ROWS][col] == Next then
+                Grid[ROWS][col] = Next * 2
+                Collapse(col, ROWS)
+                UpdateNext()
+                Message = "Phew!"
+            else
+                Message = "Row is full and incollapsible!"
+            end
+        end
+    end
 end
 
 function love.update(_)
@@ -166,11 +210,9 @@ function love.update(_)
 end
 
 function love.draw()
-    local tile_width = 90
-    local tile_padding_top = math.floor(tile_width / 2 - TileFontHeight / 2)
     -- I do not miss CSS flexbox
-    local tile_gap = 10
-    local radius = tile_width / 8
+    local tile_padding_top = math.floor(TileWidth / 2 - TileFontHeight / 2)
+    local radius = TileWidth / 8
 
     ---Draw a single tile with the correct background and text.
     ---@param tr integer Grid\[`tr`\][tc]
@@ -182,11 +224,11 @@ function love.draw()
         local bg = (TileColor[Grid[tr][tc]] or TileColor.fallback).bg
 
         love.graphics.setColor(unpack(bg))
-        love.graphics.rectangle("fill", col, row, tile_width, tile_width, radius)
+        love.graphics.rectangle("fill", col, row, TileWidth, TileWidth, radius)
 
         row = row + tile_padding_top
         love.graphics.setColor(unpack(fg))
-        love.graphics.printf(tostring(Grid[tr][tc]), TileFont, col, row, tile_width, "center")
+        love.graphics.printf(tostring(Grid[tr][tc]), TileFont, col, row, TileWidth, "center")
     end
 
     --[[ Columns ]]--
@@ -195,10 +237,10 @@ function love.draw()
     for y = 1, ROWS do
         love.graphics.rectangle(
             'fill',
-            y * tile_gap + (y - 1) * tile_width,
-            tile_gap,
-            tile_width,
-            (ROWS - 1) * tile_gap + ROWS * tile_width,
+            y * TileGap + (y - 1) * TileWidth,
+            TileGap,
+            TileWidth,
+            (ROWS - 1) * TileGap + ROWS * TileWidth,
             radius
         )
     end
@@ -206,14 +248,14 @@ function love.draw()
     --[[ Grid ]]--
 
     ---Top left y coordinate
-    local anim_bottom = (ROWS - 1) * (tile_gap + tile_width) + math.floor(tile_width / 2)
+    local anim_bottom = (ROWS - 1) * (TileGap + TileWidth) + math.floor(TileWidth / 2)
     ---@type {row: integer, col: integer, tc: integer, tr: integer}?
     local anim = nil
-    local row = tile_gap
+    local row = TileGap
     ---Number of occupied cells to determine whether game is over.
     Count = 0
     for tr = 1, ROWS do
-        local col = tile_gap
+        local col = TileGap
         for tc = 1, ROWS do
             -- Draw the tile in animation after everything else to put it on
             -- the topmost layer.
@@ -233,9 +275,9 @@ function love.draw()
             end
 
             ::continue::
-            col = col + tile_width + tile_gap
+            col = col + TileWidth + TileGap
         end
-        row = row + tile_width + tile_gap
+        row = row + TileWidth + TileGap
     end
 
     if Count == ROWS ^ 2 and State ~= "end" then
@@ -245,12 +287,12 @@ function love.draw()
     end
 
     love.graphics.setColor(1, 1, 1)
-    local col = tile_gap
+    local col = TileGap
     for x = 1, ROWS do
-        love.graphics.printf(tostring(GridTops[x]), col, row, tile_width, "center")
-        col = col + tile_width + tile_gap
+        love.graphics.printf(tostring(GridTops[x]), col, row, TileWidth, "center")
+        col = col + TileWidth + TileGap
     end
-    row = row + tile_gap + FontHeight
+    row = row + TileGap + FontHeight
 
     love.graphics.setColor(1, 1, 1)
     row = row + FontHeight
@@ -265,35 +307,33 @@ function love.draw()
 end
 
 function love.keypressed(key)
-    if State == "end" then
-        Message = "Game is already over. Get over it!"
-        return
-    end
-    if State == "animating" then
-        Message = "Please wait for animation to finish"
-        return
-    end
     local col = tonumber(key)
     if col and col > 0 and col <= ROWS then
-        local row = GridTops[col]
-        if row <= ROWS then
-            Grid[row][col] = Next
-            GridTops[col] = row + 1
-            -- Defers collapsing & updating next to after animation finishes.
-            -- See `AnimSlideEnd`.
-            AnimSlideBegin(row, col)
-            Message = "Yay"
-        else
-            if Grid[ROWS][col] == Next then
-                Grid[ROWS][col] = Next * 2
-                Collapse(col, ROWS)
-                UpdateNext()
-                Message = "Phew!"
-            else
-                Message = "Row is full and incollapsible!"
-            end
-        end
+        InsertTileAt(col)
     else
         Message = "Invalid key lol, try harder"
+    end
+end
+
+function love.mousereleased(col, row, button, _, _)
+    if button ~= 1 then
+        Message = "Not the right button"
+        return
+    end
+    if row < Columns.top or row > Columns.bot then
+        Message = "Mouse out of range"
+        return
+    end
+    local tc = 0
+    for i, c in ipairs(Columns.cols) do
+        if c[1] < col and col < c[2] then
+            tc = i
+            break
+        end
+    end
+    if tc ~= 0 then
+        InsertTileAt(tc)
+    else
+        Message = "Mouse out of range"
     end
 end
