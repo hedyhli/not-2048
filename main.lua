@@ -206,7 +206,7 @@ function love.draw()
     --[[ Grid ]]--
 
     ---Top left y coordinate
-    local bot_row = (ROWS - 1) * (tile_gap + tile_width)
+    local anim_bottom = (ROWS - 1) * (tile_gap + tile_width) + math.floor(tile_width / 2)
     ---@type {row: integer, col: integer, tc: integer, tr: integer}?
     local anim = nil
     local row = tile_gap
@@ -218,7 +218,7 @@ function love.draw()
             -- Draw the tile in animation after everything else to put it on
             -- the topmost layer.
             if GridAnim[tr][tc] then
-                anim = { row = bot_row - AnimSlideRow, col = col, tr = tr, tc = tc }
+                anim = { row = anim_bottom - AnimSlideRow, col = col, tr = tr, tc = tc }
                 if anim.row < row then
                     anim = nil
                     AnimSlideEnd()
