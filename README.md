@@ -35,7 +35,7 @@ it myself, but also [learn a whole bunch of other
 frameworks](https://github.com/hedyhli/todomvc-tui) along the way.
 
 
-[^1]: I found this use of the word quite intruguing. It's to be credited to:
+[^1]: I found this use of the word quite intriguing. It's to be credited to:
 [This article about Rust & Vlang community
 drama](https://web.archive.org/web/20231122124218/http://asvln.com/rants/pathetic.html)
 which ThePrimeagen has a reaction video of, who has also gave some emphasis to
