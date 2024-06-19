@@ -9,4 +9,4 @@ good as the original.
 
 Look how crude it is right now:
 
-![](./love.png)
+<img src="./love.png" width=300/>
