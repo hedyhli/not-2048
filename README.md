@@ -15,23 +15,23 @@ A rewrite into Fennel **is planned**, don't worry.
 
 ## The game
 
-As I've repeated stated, this is **not 2048**.
+As I've repeatedly stated, this is **not 2048**.
 
 There are several columns, you are not allowed to swipe horizontally or
 vertically to move pieces ("tiles"). On each next tile that comes, you pick a
-column for it to go. It is placed at the bottom of the tile.
+column for it to go. It is placed at the bottom of the column.
 
 Like-tiles (ones of the same value) can merge into twice of their initial
 values. The game ends when you've used all rows of all columns.
 
 There are also other ways for tiles to merge, such as horizontally (yes, across
 columns, but you can't do that manually), and a three-way merge (no, this is
-neither 2048 nor Git).
+neither 2048 nor **Git**).
 
 It's a very interesting concept; admittedly, not one I'd have thought of myself.
-However, the original game is riddled[^1] with ads, like most software nowadays;
-so I seized the opportunity to not only figure out how it works by implementing
-it myself, but also [learn a whole bunch of other
+However, the original game is riddled[^1] with ads, like most software in
+$CURRENTYEAR; so I seized the opportunity to not only figure out how it works by
+implementing it myself, but also [learn a whole bunch of other languages &
 frameworks](https://github.com/hedyhli/todomvc-tui) along the way.
 
 
