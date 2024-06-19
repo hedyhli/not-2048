@@ -1,5 +1,6 @@
 function love.load()
-    love.graphics.setNewFont(20)
+    Font = love.graphics.setNewFont(20)
+    FontHeight = Font:getHeight()
     ROWS = 5
     Message = "Press a number key 1 to 5"
     Grid = {}
@@ -98,12 +99,13 @@ end
 
 function love.draw()
     local tile_width = 90
-    local tile_padding = {15, math.floor(tile_width / 2 - 15)}
+    local tile_padding_top = math.floor(tile_width / 2 - FontHeight / 2)
+    local tile_gap = 10
 
-    local row = 10
+    local row = tile_gap
     Count = 0
     for y = 1, ROWS do
-        local col = 10
+        local col = tile_gap
         for x = 1, ROWS do
             local fg = (ColorPalette[Grid[y][x]] or FallbackColor).fg
             local bg = (ColorPalette[Grid[y][x]] or FallbackColor).bg
@@ -116,15 +118,17 @@ function love.draw()
             love.graphics.setColor(unpack(fg))
             if Grid[y][x] > 0 then
                 Count = Count + 1
-                love.graphics.print(
+                love.graphics.printf(
                     tostring(Grid[y][x]),
-                    col + tile_padding[1],
-                    row + tile_padding[2]
+                    col,
+                    row + tile_padding_top,
+                    tile_width,
+                    "center"
                 )
             end
-            col = col + tile_width + 10
+            col = col + tile_width + tile_gap
         end
-        row = row + tile_width + 10
+        row = row + tile_width + tile_gap
     end
 
     if Count == ROWS ^ 2 then
@@ -133,17 +137,17 @@ function love.draw()
     end
 
     love.graphics.setColor(1, 1, 1)
-    local col = 10
+    local col = tile_gap
     for x = 1, ROWS do
-        love.graphics.print(tostring(GridTops[x]), col, row)
-        col = col + tile_width + 10
+        love.graphics.printf(tostring(GridTops[x]), col, row, tile_width, "center")
+        col = col + tile_width + tile_gap
     end
-    row = row + 20
+    row = row + FontHeight - tile_gap
 
     love.graphics.setColor(1, 1, 1)
-    row = row + 10
+    row = row + FontHeight
     love.graphics.print("Next: " .. tostring(Next), 10, row)
-    row = row + 25
+    row = row + FontHeight
     love.graphics.print(Message, 10, row)
 end
 
