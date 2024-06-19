@@ -1,3 +1,96 @@
+-- OK (loop the Grid) Draw wants a 2D grid of visual infos, each item with
+-- - text to display
+-- - style
+-- - position: row + col
+-- Keypress/Mouse => insert new
+-- - OK (current method is fine) Index by tc
+--     Find the next free row of the column
+--     Either use current GridTops or a more encapsulated solution
+-- - OK (Grid[tr][tc]) Get the correct Cell to place
+-- - Entrance animation for placing Next into the correct Cell
+--   - OK (index Grid) cell from = bottom of the current column
+--   - OK cell move to - tr, tc
+--   - OK (just Next) the new tile
+-- TODO Update
+-- - TODO: It needs a list of animation infos, each with
+--   - What to increment = always one dimension (so either row/col)
+--   - Inc by what amount (dx//dy)
+--   - Inc until when, by which time, !! stop animation
+-- Collapse wants to pinpoint a cell and its value
+-- - OK (use Grid) Index by tr, tc => Can get a Cell
+-- - OK (Cell.tile.value) Its value
+-- - Pass information for animation, with
+--   - OK (param) the cell to move from - coords info - tr, tc
+--   - OK (calculated) the cell to move to - coords - tr, tc
+--   - OK (index GetTile) the new tile to put in the destination
+-- TODO (anything else?) Receive new animation information, must calculate
+--   - OK (index Grid) convert from/to tr+tc into from/to row+col (pos info)
+--
+-- Which means a tile has: value, text, color
+-- Tiles are immutable, there are only fixed number of cells defined in the
+-- game. Currently 2 ~ 1024. They are referenced from a Tile lookup
+--    XXX GetTile[32] => {value = 32, text = "32", style = {fg = rgb, bg = rgb}}
+--    Include the "empty tile"
+-- Cells are also fixed, for ROWS = 5, there are only 25 Cells.
+-- Can be saved in a "Grid". Indexed by
+--    XXX Grid[tr][tc]
+-- NOTE CLASS Coords is the Grid index - tr, tc
+-- NOTE CLASS Pos is the actual pixels x & y - row, col
+-- FIXME: A way to associate the immutable sitting-around Tiles & Cells
+-- NOTE CLASS Cell must contain information of
+-- - Pos.row
+-- - Pos.col
+-- - XXX Tile (needs both text & value), which then has its style!
+
+---@type Tile The 2, 4, 8 etc blocks with their unique values & colors
+local Tile = {}
+
+---@class Tile
+---@field value integer
+---@field text string
+
+function Tile:new(val)
+    return setmetatable({
+        value = val,
+        text = tostring(val),
+    }, { __index = Tile })
+end
+
+---@type Cell Information about the visual representation of a `Tile`
+local Cell = {}
+
+---@alias Coord {row: integer, col: integer}
+
+---@class Cell
+---@field row integer
+---@field col integer
+---@field tr integer
+---@field tc integer
+---@field text string
+
+---@param tile Tile
+function Cell:new(tile, tr, tc, row, col, bg, fg)
+    -- TODO
+    return setmetatable({
+        text = tile.text,
+        tr = tr,
+        tc = tc,
+        row = row,
+        col = col,
+    }, { __index = Cell })
+end
+
+---@alias TileGrid Cell[][]
+
+---@class AnimCell
+local AnimCell = {}
+
+-- TODO
+---@class AnimCell
+---@field from Coord
+---@field to Coord Destination
+---@field cell Cell
+
 function love.load()
     Font = love.graphics.newFont("IBM_Plex_Sans/Regular.ttf", 20)
     FontHeight = Font:getHeight()
@@ -32,6 +125,13 @@ function love.load()
     ---@type "begin"|"animating"|"end"
     State = "begin"
     Count = 0
+
+    ---@type Tile[]
+    Tiles = {}
+    for i = 1, 10 do
+        local val = 2 * i
+        Tiles[val] = Tile:new(val)
+    end
 
     ---@alias rgb number[]
     ---@alias hex string
