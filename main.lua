@@ -128,9 +128,9 @@ function love.load()
     function UpdateNext()
         ---@type tile
         local cap = NextMap[Max] or NextMap.fallback
-        -- Next = 2 ^ math.random(math.log(cap))
+        Next = 2 ^ math.random(math.log(cap))
         -- INFO: Use this for quickly producing large tiles for debugging.
-        Next = cap
+        -- Next = cap
     end
 
     function AnimSlideBegin(row, col)
