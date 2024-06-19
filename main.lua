@@ -47,7 +47,8 @@ function love.load()
         converted.fg = v.fg and {1, 1, 1} or {0, 0, 0}
         ColorPalette[k] = converted
     end
-    ColorPalette[0] = {bg = {34/256, 33/256, 35/256}, fg = {1, 1, 1}}
+    ---@type colorInfo
+    ColumnColor = {bg = {34/256, 33/256, 35/256}, fg = {1, 1, 1}}
 
     ---@type { [number]: number }
     NextMap = {
@@ -144,7 +145,7 @@ function love.draw()
     local anim = {row = 0, col = 0, value = "", bg = {}, fg = {}}
 
     -- Columns
-    love.graphics.setColor(unpack(ColorPalette[0].bg))
+    love.graphics.setColor(unpack(ColumnColor.bg))
     for y = 1, ROWS do
         love.graphics.rectangle(
             'fill',
