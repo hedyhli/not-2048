@@ -16,7 +16,7 @@ function love.conf(t)
     -- 90: tile width
     -- 5: number of columns of tiles
     t.window.width = 510 -- 5 * (10 + 90) + 10
-    t.window.height = 600
+    t.window.height = 650
     t.window.borderless = false         -- Remove all border visuals from the window (boolean)
     t.window.resizable = false          -- Let the window be user-resizable (boolean)
     t.window.minwidth = 1               -- Minimum window width if the window is resizable (number)
@@ -28,7 +28,7 @@ function love.conf(t)
     t.window.depth = nil                -- The number of bits per sample in the depth buffer
     t.window.stencil = nil              -- The number of bits per sample in the stencil buffer
     t.window.display = 1                -- Index of the monitor to show the window in (number)
-    t.window.highdpi = false            -- Enable high-dpi mode for the window on a Retina display (boolean)
+    t.window.highdpi = true             -- Enable high-dpi mode for the window on a Retina display (boolean)
     t.window.usedpiscale = true         -- Enable automatic DPI scaling when highdpi is set to true as well (boolean)
     t.window.x = nil                    -- The x-coordinate of the window's position in the specified display (number)
     t.window.y = nil                    -- The y-coordinate of the window's position in the specified display (number)

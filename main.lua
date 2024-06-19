@@ -1,5 +1,7 @@
 function love.load()
-    Font = love.graphics.setNewFont(20)
+    Font = love.graphics.newFont("IBM_Plex_Sans/Regular.ttf", 20)
+    BoldFont = love.graphics.newFont("IBM_Plex_Sans/Medium.ttf", 20)
+    love.graphics.setFont(Font)
     FontHeight = Font:getHeight()
     ROWS = 5
     Message = "Press a number key 1 to 5"
@@ -120,6 +122,7 @@ function love.draw()
                 Count = Count + 1
                 love.graphics.printf(
                     tostring(Grid[y][x]),
+                    BoldFont,
                     col,
                     row + tile_padding_top,
                     tile_width,
@@ -142,7 +145,7 @@ function love.draw()
         love.graphics.printf(tostring(GridTops[x]), col, row, tile_width, "center")
         col = col + tile_width + tile_gap
     end
-    row = row + FontHeight - tile_gap
+    row = row + math.floor(tile_width / 2)
 
     love.graphics.setColor(1, 1, 1)
     row = row + FontHeight
