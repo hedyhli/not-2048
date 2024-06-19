@@ -1,6 +1,7 @@
 function love.load()
     Font = love.graphics.newFont("IBM_Plex_Sans/Regular.ttf", 20)
-    BoldFont = love.graphics.newFont("IBM_Plex_Sans/Medium.ttf", 20)
+    BoldFont = love.graphics.newFont("IBM_Plex_Sans/Medium.ttf", 26)
+    BoldFontHeight = BoldFont:getHeight()
     love.graphics.setFont(Font)
     FontHeight = Font:getHeight()
     ROWS = 5
@@ -23,13 +24,13 @@ function love.load()
         [2]   = {bg = "473335", fg = true},
         [4]   = {bg = "4E5D5E", fg = true},
         [8]   = {bg = "548687", fg = true},
-        [16]  = {bg = "A89877", fg = false},
+        [16]  = {bg = "A89877", fg = true},
         [32]  = {bg = "FCAA67", fg = false},
-        [64]  = {bg = "9582FF", fg = false},
+        [64]  = {bg = "9582FF", fg = true},
         [128] = {bg = "2165BF", fg = true},
         [256] = {bg = "43CDC6", fg = false},
         [512] = {bg = "C996B3", fg = false},
-        [1024] = {bg = "C95270", fg = false},
+        [1024] = {bg = "C95270", fg = true},
     }
     FallbackColor = {bg = {1, 1, 1}, fg = {0, 0, 0}}
     -- Convert hex to rgb
@@ -101,7 +102,7 @@ end
 
 function love.draw()
     local tile_width = 90
-    local tile_padding_top = math.floor(tile_width / 2 - FontHeight / 2)
+    local tile_padding_top = math.floor(tile_width / 2 - BoldFontHeight / 2)
     local tile_gap = 10
 
     local row = tile_gap
