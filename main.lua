@@ -13,11 +13,12 @@ function love.load()
     State = "begin"
 
     ---@alias hex string
-    ---@alias color hex|rgb
-    ---@alias colorInfo {bg: color, fg: boolean|rgb}
+    ---@alias colorInfo {bg: rgb, fg: rgb}
     ---{ HEX, is-fg? }
     ---@type { [number]: colorInfo }
-    ColorPalette = {
+    ColorPalette = {}
+    ---@type { [number]: {bg: hex, fg: boolean} }
+    local color_tmp = {
         [2]   = {bg = "473335", fg = true},
         [4]   = {bg = "4E5D5E", fg = true},
         [8]   = {bg = "548687", fg = true},
@@ -31,22 +32,22 @@ function love.load()
     }
     FallbackColor = {bg = {1, 1, 1}, fg = {0, 0, 0}}
     -- Convert hex to rgb
-    for _, v in pairs(ColorPalette) do
+    for k, v in pairs(color_tmp) do
         ---@type rgb
         local rgb = {}
         local hex = v.bg
         -- A little less cryptic than `for i = 1, 5, 2 do`
         for _, i in ipairs({1, 3, 5}) do
-            ---@cast hex string
             rgb[#rgb + 1] = tonumber(hex:sub(i, i+1), 16) / 256
             i = i + 1
         end
-        ---@as rgb
-        v.bg = rgb
-        ---@as rgb
-        v.fg = v.fg and {1, 1, 1} or {0, 0, 0}
+        ---@type colorInfo
+        local converted = {}
+        converted.bg = rgb
+        converted.fg = v.fg and {1, 1, 1} or {0, 0, 0}
+        ColorPalette[k] = converted
     end
-    ColorPalette[0] = {bg = {54/256, 58/256, 78/256}, fg = {1, 1, 1}}
+    ColorPalette[0] = {bg = {34/256, 33/256, 35/256}, fg = {1, 1, 1}}
 
     ---@type { [number]: number }
     NextMap = {
@@ -136,11 +137,26 @@ function love.draw()
     local tile_width = 90
     local tile_padding_top = math.floor(tile_width / 2 - BoldFontHeight / 2)
     local tile_gap = 10
+    local radius = tile_width / 8
 
     local bot_row = (ROWS - 1) * (tile_gap + tile_width)
     local has_anim = false
-    local anim = {row = 0, col = 0, value = 0, bg = {}, fg = {}}
+    local anim = {row = 0, col = 0, value = "", bg = {}, fg = {}}
 
+    -- Columns
+    love.graphics.setColor(unpack(ColorPalette[0].bg))
+    for y = 1, ROWS do
+        love.graphics.rectangle(
+            'fill',
+            y * tile_gap + (y - 1) * tile_width,
+            tile_gap,
+            tile_width,
+            (ROWS - 1) * tile_gap + ROWS * tile_width,
+            radius
+        )
+    end
+
+    -- Grid
     local row = tile_gap
     Count = 0
     for y = 1, ROWS do
@@ -161,20 +177,16 @@ function love.draw()
                     AnimSlideEnd()
                 else
                     has_anim = true
-                    love.graphics.setColor(unpack(ColorPalette[0].bg))
-                    love.graphics.rectangle('fill', col, row, tile_width, tile_width)
                     goto continue
                 end
             end
 
-            ---@cast bg rgb
-            love.graphics.setColor(unpack(bg))
-            love.graphics.rectangle('fill', col, row, tile_width, tile_width)
-
-            ---@cast fg rgb
-            love.graphics.setColor(unpack(fg))
             if Grid[y][x] > 0 then
                 Count = Count + 1
+                love.graphics.setColor(unpack(bg))
+                love.graphics.rectangle('fill', col, row, tile_width, tile_width, radius)
+
+                love.graphics.setColor(unpack(fg))
                 love.graphics.printf(
                     tostring(Grid[y][x]),
                     BoldFont,
@@ -190,8 +202,9 @@ function love.draw()
         row = row + tile_width + tile_gap
     end
 
-    if Count == ROWS ^ 2 then
+    if Count == ROWS ^ 2 and State ~= "end" then
         State = "end"
+        -- Avoids overwriting new messages on top
         Message = "GAME OVER"
     end
 
@@ -201,7 +214,7 @@ function love.draw()
         love.graphics.printf(tostring(GridTops[x]), col, row, tile_width, "center")
         col = col + tile_width + tile_gap
     end
-    row = row + math.floor(tile_width / 2)
+    row = row + tile_gap + FontHeight
 
     love.graphics.setColor(1, 1, 1)
     row = row + FontHeight
@@ -212,7 +225,7 @@ function love.draw()
     -- Animating tile must be above all others
     if has_anim then
         love.graphics.setColor(unpack(anim.bg))
-        love.graphics.rectangle('fill', anim.col, anim.row, tile_width, tile_width)
+        love.graphics.rectangle('fill', anim.col, anim.row, tile_width, tile_width, radius)
         love.graphics.setColor(unpack(anim.fg))
         love.graphics.printf(anim.value, BoldFont, anim.col, anim.row + tile_padding_top, tile_width, "center")
     end
