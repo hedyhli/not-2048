@@ -93,8 +93,12 @@ function love.load()
         fallback = 64
     }
 
+    ---Values of tiles
     ---@type number[][]
     Grid = {}
+    ---Positions of tiles
+    ---@type number[][]
+    GridPos = {}
     ---@type number[] The next index used for insertion.
     ---`GridTops[col]` is the row number of the next item inserted into `col`.
     GridTops = {}
@@ -122,6 +126,52 @@ function love.load()
     --- @param x integer
     --- @param y integer
     function Collapse(x, y)
+        -- TODO:
+        -- Animation for moving up:
+        -- - Each animation is per-cell
+        --   - From which cell -> to which cell
+        --     Can store using GridAnim
+        --       [y][x] = {from = {row=, col=}, to = {row=, col=}}
+        --   - Current frame = tile pos in grid
+        --     Can store in GridPos
+        --     .draw() only needs to know about GridPos
+        --     AnimNext is responsible for stopping animation
+        --
+        -- - Collapse can trigger an animation to start
+        --   Specify which cell, from where -> to where
+        -- - Should be able to trigger multiple animations to run
+        --   simultaneously
+        --   Can use an array of tileCoords for AnimNext to update all frames
+        --   in batch one by one.
+        --     AnimActive = {row=, col=}[]  -- for all merge animations
+        -- - Current entrance animation remain separate (distance (to-from) > 1)
+        --   Logic for this same as current, rename slide to entrance
+        -- - Only *either* entrance, or merge anim, can run at the same time
+        --
+        -- - All tiles in question no more text
+        -- - Gradual color change (before -> after)
+        -- - After position merged, show new text & color
+        --
+        -- Possible FSM
+        --   {0} Key -> Entrance anim ->
+        --   {1} Check collapse -> Has collapse -> Set anims
+        --             (at each point, AnimActive is for a single collapse)
+        --   AnimNext (all key events & collapses paused)
+        --   AnimDone -> GOTO {1} (for EACH .to (test) coord of the anims) ???
+        --   No more collapse -> Resume event listening (GOTO {0})
+
+        -- Checks
+        -- X Single up
+        -- - 2 Horz   @ #
+        -- -        # @
+        -- - 3 Horz # @ #
+        -- - Triangle #
+        --            @ #
+        -- - 4        #
+        --          # @ #
+        -- All These must move the Right/Left tiles up,
+        -- For those columns that moved, check for collapse again.
+
         local this = Grid[y][x]
         while y > 1 do
             local up = Grid[y-1][x]
