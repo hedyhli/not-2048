@@ -155,6 +155,7 @@ local AnimCell = {}
 ---@field dest Position Destination Cell.row+col (SHOULD BE IMMUTABLE)
 ---@field initial Position
 ---@field delta {dr: integer, dc: integer} Added to row/col of `dest` (NOT coords)
+---@field done boolean
 
 ---Create an AnimCell instance using from and to coords.
 -- NOTE: Not to be used directly! Use `AnimMerge:new` instead
@@ -168,6 +169,7 @@ function AnimCell:new(coord, dest_coord)
         dest = {row = dest_cell.row, col = dest_cell.col},
         initial = {row = target.row, col = target.col},
         delta = {dr = -10, dc = 0},
+        done = false,
     }, { __index = AnimCell })
 end
 
@@ -175,11 +177,22 @@ end
 -- NOTE: Note to be called directly! Use `AnimMerge:next` instead to update in batch.
 ---@return boolean ended Animation has ended
 function AnimCell:next()
-    local nrow, ncol = self.target.row + self.delta.dr, self.target.col + self.delta.dc
-    -- TODO: Check ncol by also checking polarity of delta
-    if nrow < self.dest.row then
+    local dr, dc = self.delta.dr, self.delta.dc
+    local nrow, ncol = self.target.row + dr, self.target.col + dc
+
+    if dr > 0 and (nrow > self.dest.row) then
         return true
     end
+    if dr < 0 and (nrow < self.dest.row) then
+        return true
+    end
+    if dc > 0 and (ncol > self.dest.row) then
+        return true
+    end
+    if dc < 0 and (ncol < self.dest.row) then
+        return true
+    end
+
     -- Move it!
     self.target.row, self.target.col = nrow, ncol
     return false
@@ -212,8 +225,8 @@ function AnimMerge:init(sources, final, new_tile)
 
     ---@type AnimCell[]
     local anim_cells = {}
-    for i, src_coord in ipairs(sources) do
-        anim_cells[i] = AnimCell:new(src_coord, dest_coord)
+    for _, src_coord in ipairs(sources) do
+        table.insert(anim_cells, AnimCell:new(src_coord, dest_coord))
     end
 
     self.anim_cells = anim_cells
@@ -239,23 +252,35 @@ end
 -- ```
 function AnimMerge:next()
     local done = false
-    for _, ac in ipairs(self.anim_cells) do
+    for _, ac in pairs(self.anim_cells) do
         -- All should be assumed to end at the same time.
         done = ac:next()
+        ac.done = done
     end
     return done
 end
 
 ---Set destination Cell to have the new tile, make those moving cells empty tiles.
 ---Client responsible for calling `Collapse(self.final.tc, self.final.tr)`.
+---@return AnimCell[] finished_cells
 function AnimMerge:finish()
     self.final.tile = self.new_tile
     self.active = false
-    for _, ac in ipairs(self.anim_cells) do
-        ac.target.tile = Tile:new(0, {})
-        ac.target.row = ac.initial.row
-        ac.target.col = ac.initial.col
+    local finished = {}
+    local finished_keys = {}
+    for k, ac in pairs(self.anim_cells) do
+        if ac.done then
+            ac.target.tile = Tile:new(0, {})
+            ac.target.row = ac.initial.row
+            ac.target.col = ac.initial.col
+            table.insert(finished, ac)
+            table.insert(finished_keys, k)
+        end
     end
+    for _, key in ipairs(finished_keys) do
+        self.anim_cells[key] = nil
+    end
+    return finished
 end
 
 
@@ -476,8 +501,20 @@ function love.update(_)
     if Md.AnimMerge.active then
         local done = Md.AnimMerge:next()
         if done then
-            Md.AnimMerge:finish()
-            if not Collapse(Md.AnimMerge.final.tc, Md.AnimMerge.final.tr) then
+            -- Several AnimMerges or singleton?
+            -- CONFLICT:
+            -- :finish() sets new_tile to AnimMerge.final Cell
+            -- - Horizontal merges can trigger multiple subsequent merges
+            -- - Left might have a merge going on at the same time as a right
+            --   merge. Should they each have a :finish()?
+            --   Because now Left will have a different new_tile/final than
+            --   Right.
+            local finished = Md.AnimMerge:finish()
+            local has_collapse = Collapse(Md.AnimMerge.final.tc, Md.AnimMerge.final.tr)
+            -- for _, ac in ipairs(finished) do
+            --     has_collapse = Collapse(ac.target.tc, ac.target.tr)
+            -- end
+            if not has_collapse then
                 UpdateNext()
             end
         end
