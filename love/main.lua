@@ -1,7 +1,6 @@
 -- TODO:
--- - Rewrite entrance anim
+-- X Rewrite entrance anim
 -- - Set AnimCell.delta intelligently
--- - Put Next into Model
 -- - Check either left or right horizontal collapse
 -- - Check both collapse
 -- - Profit!
@@ -121,9 +120,10 @@ function Cell:new(tile, coord, pos)
     }, { __index = Cell })
 end
 
----Wraps `Cell:new`
-function Cell:new_empty(coord, pos)
-    return Cell:new(Tile:new(0, {}), coord, pos)
+---Compares tr, tc
+---@param cell Cell
+function Cell:eq(cell)
+    return cell.tr == self.tr and cell.tc == self.tc
 end
 
 ---@alias CellGrid Cell[][]
@@ -137,7 +137,8 @@ function InitGrid()
         Grid[tr] = {}
         local col = TileGap
         for tc = 1, ROWS do
-            Grid[tr][tc] = Cell:new_empty(
+            Grid[tr][tc] = Cell:new(
+                Tile:new(0, {}),
                 {tr = tr, tc = tc},
                 {row = row, col = col}
             )
@@ -260,6 +261,55 @@ function AnimMerge:next()
     return done
 end
 
+---@type AnimEntrance
+local AnimEntrance = {}
+
+---@class AnimEntrance
+---@field dest Position Destination position
+---@field target Cell The actual cell (reference) that is moved
+---@field active boolean
+
+---Initialize the singleton.
+function AnimEntrance:new()
+    return setmetatable({
+        dest = nil,
+        target = nil,
+        active = false,
+    }, { __index = AnimEntrance })
+end
+
+---@param cell Cell To be inserted
+function AnimEntrance:init(cell)
+    local dest = {row = cell.row, col = cell.col}
+    local target = cell
+    -- Position of bottomost cell + half of tilewidth further bottom.
+    target.row = Grid[cell.tr][ROWS].col + math.floor(TileWidth / 2)
+
+    self.dest = dest
+    self.target = target
+    self.active = true
+    State = "animating"
+end
+
+---Client responsible for calling `:finish()` if done
+---@return boolean done
+function AnimEntrance:next()
+    local nrow = self.target.row - 30
+    if nrow < self.dest.row then
+        return true
+    end
+    self.target.row = nrow
+    return false
+end
+
+function AnimEntrance:finish()
+    self.active = false
+    self.target.row = self.dest.row
+    -- HACK: Not sensibly resetting to previous values
+    State = "begin"
+    Message = "yay"
+end
+
 ---Set destination Cell to have the new tile, make those moving cells empty tiles.
 ---Client responsible for calling `Collapse(self.final.tc, self.final.tr)`.
 ---@return AnimCell[] finished_cells
@@ -296,9 +346,9 @@ function love.load()
     -- Game Params
     ROWS = 5
     ---@type tileValue
-    Next = 2
+    NextTileValue = 2
     ---@type tileValue
-    Max = 2
+    MaxTileValue = 2
     TileWidth = 90
     TileGap = 10
 
@@ -363,31 +413,16 @@ function love.load()
     ---@type number[] The next index used for insertion.
     ---`GridTops[col]` is the row number of the next item inserted into `col`.
     GridTops = {}
-    ---@type boolean[][] `GridAnim[tr][tc]` Indicates whether tile at `row`
-    ---and `col` is currently in entrance animation. Refer to `AnimSlideBegin`.
-    GridAnim = {} -- TODO
     for tr = 1, ROWS do
-        GridAnim[tr] = {}
         GridTops[tr] = 1
-        for tc = 1, ROWS do
-            GridAnim[tr][tc] = false
-        end
     end
-
-    --[[ Entrance animation ]]--
-    ---@type number Understood as animation frame, used as the row of the tile
-    ---to be placed, which is currently in vertical animation. See `love.draw`
-    AnimSlideRow = -1
-    ---@type Position
-    ---The coordinates of the current tile in sliding animation (insertion).
-    AnimSlide = {row = 0, col = 0}
 
     --[[ Model ]]--
     -- Model. Structure of globals that might change.
     Md = {
         AnimMerge = AnimMerge:new(),
         -- TODO
-        AnimEntrance = nil,
+        AnimEntrance = AnimEntrance:new(),
         Next = 0,
     }
 
@@ -419,7 +454,7 @@ function love.load()
         local up = Grid[tr-1][tc]
         if up.tile.value == this.tile.value then
             local new_tile = Tile.get(this.tile.value * 2)
-            Max = math.max(Max, new_tile.value)
+            MaxTileValue = math.max(MaxTileValue, new_tile.value)
             GridTops[tc] = GridTops[tc] - 1
 
             Md.AnimMerge:init({{tr = tr, tc = tc}}, up, new_tile)
@@ -430,37 +465,11 @@ function love.load()
 
     function UpdateNext()
         ---@type tileValue
-        local cap = NextMap[Max] or NextMap.fallback
+        local cap = NextMap[MaxTileValue] or NextMap.fallback
         ---@type tileValue
-        Next = 2 ^ math.random(math.log(cap))
+        NextTileValue = 2 ^ math.random(math.log(cap))
         -- INFO: Use this for quickly producing large tiles for debugging.
         -- Next = cap
-    end
-
-    function AnimSlideBegin(row, col)
-        GridAnim[row][col] = true
-        AnimSlide = {row = row, col = col}
-        AnimSlideRow = 0
-        State = "animating"
-    end
-
-    function AnimSlideNext()
-        AnimSlideRow = AnimSlideRow + 30
-    end
-
-    function AnimSlideEnd()
-        local row, col = AnimSlide.row, AnimSlide.col
-        AnimSlide.row, AnimSlide.col = 0, 0
-        GridAnim[row][col] = false
-        AnimSlideRow = -1
-        -- HACK: Not sensibly resetting to previous values
-        State = "begin"
-        Message = "Yay"
-        -- Motion of whatever collapsing of tiles must be done after the tile
-        -- in question finishes making their animated entrance.
-        if not Collapse(col, row) then
-            UpdateNext()
-        end
     end
 
     ---@param col integer
@@ -476,15 +485,15 @@ function love.load()
 
         local row = GridTops[col]
         if row <= ROWS then
-            Grid[row][col].tile = Tile.get(Next)
+            Grid[row][col].tile = Tile.get(NextTileValue)
             GridTops[col] = row + 1
             -- Defers collapsing & updating next to after animation finishes.
-            -- See `AnimSlideEnd`.
-            AnimSlideBegin(row, col)
+            -- See `love.update`.
+            Md.AnimEntrance:init(Grid[row][col])
             Message = "Yay"
         else
-            if Grid[ROWS][col].tile.value == Next then
-                Grid[ROWS][col].tile = Tile.get(Next * 2)
+            if Grid[ROWS][col].tile.value == NextTileValue then
+                Grid[ROWS][col].tile = Tile.get(NextTileValue * 2)
                 Collapse(col, ROWS)
                 Message = "Phew!"
             else
@@ -495,8 +504,14 @@ function love.load()
 end
 
 function love.update(_)
-    if State == "animating" then
-        AnimSlideNext()
+    if Md.AnimEntrance.active then
+        local done = Md.AnimEntrance:next()
+        if done then
+            Md.AnimEntrance:finish()
+            if not Collapse(Md.AnimEntrance.target.tc, Md.AnimEntrance.target.tr) then
+                UpdateNext()
+            end
+        end
     end
     if Md.AnimMerge.active then
         local done = Md.AnimMerge:next()
@@ -509,7 +524,7 @@ function love.update(_)
             --   merge. Should they each have a :finish()?
             --   Because now Left will have a different new_tile/final than
             --   Right.
-            local finished = Md.AnimMerge:finish()
+            local _ = Md.AnimMerge:finish()
             local has_collapse = Collapse(Md.AnimMerge.final.tc, Md.AnimMerge.final.tr)
             -- for _, ac in ipairs(finished) do
             --     has_collapse = Collapse(ac.target.tc, ac.target.tr)
@@ -521,23 +536,22 @@ function love.update(_)
     end
 end
 
-function love.draw()
-    -- I do not miss CSS flexbox
+---Draw a single tile with the correct background and text.
+function Cell:draw()
+    local tile = self.tile
     local tile_padding_top = math.floor(TileWidth / 2 - TileFontHeight / 2)
+    local text_row = self.row + tile_padding_top
     local radius = TileWidth / 8
 
-    ---Draw a single tile with the correct background and text.
-    ---@param tile Tile The tile to draw
-    ---@param row integer Draws at `row + tile_padding_top`
-    ---@param col integer Where to draw
-    local function draw_tile(tile, row, col)
-        love.graphics.setColor(unpack(tile.bg))
-        love.graphics.rectangle("fill", col, row, TileWidth, TileWidth, radius)
+    love.graphics.setColor(unpack(tile.bg))
+    love.graphics.rectangle("fill", self.col, self.row, TileWidth, TileWidth, radius)
 
-        row = row + tile_padding_top
-        love.graphics.setColor(unpack(tile.fg))
-        love.graphics.printf(tile.text, TileFont, col, row, TileWidth, "center")
-    end
+    love.graphics.setColor(unpack(tile.fg))
+    love.graphics.printf(tile.text, TileFont, self.col, text_row, TileWidth, "center")
+end
+
+function love.draw()
+    local radius = TileWidth / 8
 
     --[[ Columns ]]--
 
@@ -555,37 +569,16 @@ function love.draw()
 
     --[[ Grid ]]--
 
-    ---Top left y coordinate
-    local anim_bottom = (ROWS - 1) * (TileGap + TileWidth) + math.floor(TileWidth / 2)
-    ---@type {row: integer, col: integer, tile: Tile}?
-    local anim = nil
     ---Number of occupied cells to determine whether game is over.
     -- TODO: Not actually true because some filled rows can still be collapsible
     Count = 0
     for tr = 1, ROWS do
         for tc = 1, ROWS do
             local cell = Grid[tr][tc]
-            -- Draw the tile in animation after everything else to put it on
-            -- the topmost layer.
-            if GridAnim[tr][tc] then
-                anim = {
-                    row = anim_bottom - AnimSlideRow,
-                    col = cell.col,
-                    tile = cell.tile,
-                }
-                if anim.row < cell.row then
-                    anim = nil
-                    AnimSlideEnd()
-                else
-                    goto continue
-                end
-            end
-
             if cell.tile.value ~= 0 then
                 Count = Count + 1
-                draw_tile(cell.tile, cell.row, cell.col)
+                Cell.draw(cell)
             end
-            ::continue::
         end
     end
     local row = (TileGap + TileWidth) * ROWS
@@ -596,6 +589,8 @@ function love.draw()
         Message = "GAME OVER"
     end
 
+    --[[ Debug info ]]--
+
     love.graphics.setColor(1, 1, 1)
     local col = TileGap
     for x = 1, ROWS do
@@ -604,16 +599,13 @@ function love.draw()
     end
     row = row + TileGap + FontHeight
 
+    --[[ Next & messages ]]--
+
     love.graphics.setColor(1, 1, 1)
     row = row + FontHeight
-    love.graphics.print("Next: " .. tostring(Next), 10, row)
+    love.graphics.print("Next: " .. tostring(NextTileValue), 10, row)
     row = row + FontHeight
     love.graphics.print(Message, 10, row)
-
-    -- Animating tile must be above all others
-    if anim then
-        draw_tile(anim.tile, anim.row, anim.col)
-    end
 end
 
 function love.keypressed(key)
