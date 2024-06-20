@@ -1,51 +1,10 @@
--- OK (loop the Grid) Draw wants a 2D grid of visual infos, each item with
--- - text to display
--- - style
--- - position: row + col
--- Keypress/Mouse => insert new
--- - OK (current method is fine) Index by tc
---     Find the next free row of the column
---     Either use current GridTops or a more encapsulated solution
--- - OK (Grid[tr][tc]) Get the correct Cell to place
--- - Entrance animation for placing Next into the correct Cell
---   - OK (index Grid) cell from = bottom of the current column
---   - OK cell move to - tr, tc
---   - OK (just Next) the new tile
--- TODO Update
--- - It needs a list of animation infos, each with
---     DONE: AnimInfo:
---       - Coords (tr/tc)
---       - Dest (cell) (with dest tile)
---   - DONE What to increment = always one dimension (so either row/col)
---     DONE Change the cell pos.row/col in the actual Grid
---   - DONE Inc by what amount (dx//dy) - CONST? MoveDelta
---   - DONE Inc until when, by which time, !! stop animation
---     (Dest as a cell)
---     DONE when done, set the cell we're incrementing back to the dest
--- Collapse wants to pinpoint a cell and its value
--- - OK (use Grid) Index by tr, tc => Can get a Cell
--- - OK (Cell.tile.value) Its value
--- - Pass information for animation, with
---   - OK (param) the cell to move from - coords info - tr, tc
---   - OK (calculated) the cell to move to - coords - tr, tc
---   - OK (index GetTile) the new tile to put in the destination
--- Receive new animation information, must calculate
---   - OK (index Grid) convert from/to tr+tc into from/to row+col (pos info)
---
--- DONE Which means a tile has: value, text, color
--- XXX Tiles are immutable, there are only fixed number of cells defined in the
--- game. Currently 2 ~ 1024. They are referenced from a Tile lookup
---    XXX GetTile[32] => {value = 32, text = "32", style = {fg = rgb, bg = rgb}}
---    Include the "empty tile"
--- XXX Cells are also fixed, for ROWS = 5, there are only 25 Cells.
--- Can be saved in a "Grid". Indexed by
---    XXX Grid[tr][tc]
--- DONE Coords is the Grid index - tr, tc
--- DONE Pos is the actual pixels x & y - row, col
--- DONE Cell must contain information of
--- - Pos.row
--- - Pos.col
--- - DONE Tile (needs both text & value), which then has its style!
+-- TODO:
+-- - Rewrite entrance anim
+-- - Set AnimCell.delta intelligently
+-- - Put Next into Model
+-- - Check either left or right horizontal collapse
+-- - Check both collapse
+-- - Profit!
 
 -- Global:
 --   Grid, GetTile
@@ -391,7 +350,6 @@ function love.load()
     end
 
     --[[ Entrance animation ]]--
-    -- TODO: After everything is working, encapsulate into AnimEntrance class
     ---@type number Understood as animation frame, used as the row of the tile
     ---to be placed, which is currently in vertical animation. See `love.draw`
     AnimSlideRow = -1
@@ -615,7 +573,6 @@ function love.draw()
     row = row + FontHeight
     love.graphics.print(Message, 10, row)
 
-    -- TODO: better Anim entrance
     -- Animating tile must be above all others
     if anim then
         draw_tile(anim.tile, anim.row, anim.col)
