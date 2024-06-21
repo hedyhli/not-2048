@@ -425,6 +425,7 @@ end
 ---@param to Cell
 ---@param right Cell
 ---@param new_tile Tile
+---@param data any
 function AniSeq:init_horz2(left, to, right, new_tile, data)
     self.seq = {
         AniMove:new({left, right}, to, new_tile),
@@ -453,6 +454,37 @@ function AniSeq:init_horz2(left, to, right, new_tile, data)
             ))
         end
     end
+    self.active = true
+    self.data = data
+end
+
+---Initialize the animation sequence of a triangle collapse.
+---@param side Cell
+---@param to Cell
+---@param up Cell
+---@param new_tile Tile
+function AniSeq:init_tri(side, to, up, new_tile, data)
+    self.seq = {
+        AniMove:new({side, up}, to, new_tile),
+        AniEnlarge:new(to),
+    }
+    -- Move left/right column up
+    for tr = side.tr + 1, ROWS do
+        local cell = Grid[tr][side.tc]
+        local side_up = Grid[tr-1][side.tc]
+        if cell.tile.value > 0 then
+            table.insert(self.seq, AniMove:new(
+                {{tr = cell.tr, tc = cell.tc}},
+                side_up,
+                cell.tile
+            ))
+        end
+    end
+    table.insert(self.seq, AniMove:new(
+        {{tr = to.tr, tc = to.tc}},
+        up,
+        new_tile
+    ))
     self.active = true
     self.data = data
 end
@@ -584,7 +616,9 @@ function love.load()
         -- 4. - 3 Horz # @ #
         -- 5. - Triangle #
         --               @ #
-        -- 6. - 4        #
+        -- 6.            #
+        --             # @
+        -- 7. - 4        #
         --             # @ #  -- Not possible under current AniMove impl!
         -- All These must move the Right/Left tiles up,
         -- For those columns that moved, check for collapse again.
@@ -592,15 +626,30 @@ function love.load()
         local this = Grid[tr][tc]
         local this_coord = {tr = tr, tc = tc}
 
-        --[[ 1: vertical ]]--
-        if tr > 1 then
+        --[[ 7: top, left, right ]]--
+        --[[ 5: left-triangle  ]]--
+        if tc > 1 and tr > 1 then
+            local left = Grid[tr][tc-1]
             local up = Grid[tr-1][tc]
-            if up.tile.value == this.tile.value then
-                local new_tile = Tile.get(this.tile.value * 2)
+            if left.tile.value == up.tile.value and left.tile.value == this.tile.value then
+                local new_tile = Tile.get(this.tile.value * 4)
                 MaxTileValue = math.max(MaxTileValue, new_tile.value)
                 GridTops[tc] = GridTops[tc] - 1
-
-                Md.AniSeq:init_vert({this_coord}, up, new_tile, up)
+                GridTops[tc-1] = GridTops[tc-1] - 1
+                Md.AniSeq:init_tri(left, this, up, new_tile, up)
+                return true
+            end
+        end
+        --[[ 6: right-triangle  ]]--
+        if tc < ROWS and tr > 1 then
+            local right = Grid[tr][tc+1]
+            local up = Grid[tr-1][tc]
+            if right.tile.value == up.tile.value and right.tile.value == this.tile.value then
+                local new_tile = Tile.get(this.tile.value * 4)
+                MaxTileValue = math.max(MaxTileValue, new_tile.value)
+                GridTops[tc] = GridTops[tc] - 1
+                GridTops[tc+1] = GridTops[tc+1] - 1
+                Md.AniSeq:init_tri(right, this, up, new_tile, up)
                 return true
             end
         end
@@ -636,6 +685,18 @@ function love.load()
                 MaxTileValue = math.max(MaxTileValue, new_tile.value)
                 GridTops[tc+1] = GridTops[tc+1] - 1
                 Md.AniSeq:init_horz1({tr = right.tr, tc = right.tc}, this, new_tile, this)
+                return true
+            end
+        end
+        --[[ 1: vertical ]]--
+        if tr > 1 then
+            local up = Grid[tr-1][tc]
+            if up.tile.value == this.tile.value then
+                local new_tile = Tile.get(this.tile.value * 2)
+                MaxTileValue = math.max(MaxTileValue, new_tile.value)
+                GridTops[tc] = GridTops[tc] - 1
+
+                Md.AniSeq:init_vert({this_coord}, up, new_tile, up)
                 return true
             end
         end
