@@ -1,3 +1,4 @@
+----[[ Classes and helper functions ]]---------------------
 
 ---Whether all cell's tile values are equal
 ---@param items Cell[]
@@ -45,6 +46,28 @@ function MakeTileColorTable(hex_map, fallback_color)
     end
     TileColor.fallback = fallback_color
 end
+
+----[[ Basic classes ]] -----------------------------------
+--[[
+
+CLASS Tile - Instantiated once for each 2, 4, 8 etc. It represents the value of
+a Cell. All known tiles are instantiated during startup using the
+`init_GetTile` classmethod. All new tiles (either from newly inserted Cells, or
+from merges) are fetched using `Tile.get`. Each tile has its own background and
+foreground color.
+
+CLASS Cell - Instanciated once for each cell in the ROWS-by-ROWS grid. (See
+param ROWS in `love.load`). It's the visual representation of a tile. All known
+Cells are instantiated once during startup in the `InitGrid` function. Cells
+are never created nor destroyed for the rest of the game.
+
+The Grid is a 2D array of Cells. It is indexed by tr, the row number, and tc,
+the column number. Each cell also knows of its tr and tc within the grid. Each
+cell has fields row and col, which represents the top-left position of the cell
+in pixels. These two fields are changed when a cell is in animation. The Tile
+field changes during merges and insertion. Other fields are readonly.
+
+--]]
 
 ---@type Tile The 2, 4, 8 etc blocks with their unique values & colors
 local Tile = {}
@@ -150,6 +173,41 @@ function InitGrid()
         row = row + TileWidth + TileGap
     end
 end
+
+----[[ ANIMATIONS ]]---------------------------------------
+--[[
+
+The classes all have the 'Ani' prefix in their name.
+
+CLASS AniCell - the most basic class, which is responsible for moving a single
+cell. It should not be used directly. Opt for AniMove *even if there's only one
+cell to move*.
+
+CLASS AniMove - for moving one or more cells towards a single destination at
+the same time, then sets the new tile at the destination cell. It manages its
+own list of AniCell instances, calling AniCell.next on each, simultaneously.
+Most likely not to be called anywhere for within application functions. It is
+used by AniSeq.
+
+CLASS AniEnlarge - another basic class, but for the cell size scaling effect,
+typically when a new merged cell is created after a series of AniMove's.
+
+CLASS AniSeq - the singleton (for now) that interfaces directly with the rest
+of the application. It represents a single Collapse operation which requires
+one AniEnlarge and a few AniMove's. It is instantiated once during `love.load`
+and newly reset each time a `Collapse` is found. Animation frames are advanced
+by calling the :next() method by `love.update`.
+
+Ani is an abstract class (or interface) that is required for AniSeq to call
+either AniEnlarge OR AniMove the same way. All "Ani*" classes implements the
+Ani interface. (But for now, only AniMove and AniEnlarge is required to
+implement it.)
+
+CLASS AniEntrance - a standalone animation by itself used for moving a cell
+from the bottom to its new position for newly inserted cells. It is used
+directly and advanced by `love.update`.
+
+--]]
 
 ---@class AniCell A moving cell
 local AniCell = {}
@@ -396,13 +454,13 @@ function AniSeq:new()
 end
 
 ---Initialize the animation sequence of a vertical collapse
----@param sources Coord[]
----@param to Cell
+---@param up Cell
+---@param this Cell
 ---@param new_tile Tile
-function AniSeq:init_vert(sources, to, new_tile, data)
+function AniSeq:init_vert(up, this, new_tile, data)
     self.seq = {
-        AniMove:new(sources, to, new_tile),
-        AniEnlarge:new(to),
+        AniMove:new({{tr = this.tr, tc = this.tc}}, up, new_tile),
+        AniEnlarge:new(up),
     }
     self.active = true
     self.data = data
@@ -426,6 +484,8 @@ function AniSeq:init_horz_one(source, to, new_tile, data)
                 self.seq,
                 AniMove:new({{tr = cell.tr, tc = cell.tc}}, up, cell.tile)
             )
+        else
+            break
         end
     end
     self.active = true
@@ -433,6 +493,9 @@ function AniSeq:init_horz_one(source, to, new_tile, data)
 end
 
 ---Initialize the animation sequence of a horizontal collapse from BOTH sides
+---1. both left and right merges into the new cell
+---2. new cell applies `new_tile`
+---3. cells after both left and right files up (in sequence for now)
 ---@param left Cell
 ---@param to Cell
 ---@param right Cell
@@ -452,6 +515,8 @@ function AniSeq:init_horz_both(left, to, right, new_tile, data)
                 self.seq,
                 AniMove:new({{tr = cell.tr, tc = cell.tc}}, up, cell.tile)
             )
+        else
+            break
         end
     end
     for tr = right.tr + 1, ROWS do
@@ -462,6 +527,8 @@ function AniSeq:init_horz_both(left, to, right, new_tile, data)
                 self.seq,
                 AniMove:new({{tr = cell.tr, tc = cell.tc}}, up, cell.tile)
             )
+        else
+            break
         end
     end
     self.active = true
@@ -469,6 +536,10 @@ function AniSeq:init_horz_both(left, to, right, new_tile, data)
 end
 
 ---Initialize the animation sequence of a triangle collapse.
+---1. the side and up cells all merge into the new cell
+---2. the new cell applies `new_tile`
+---3. the new cell moves upwards into `up`
+---4. cells below `side` files up
 ---@param side Cell Any side
 ---@param to Cell
 ---@param up Cell
@@ -488,6 +559,8 @@ function AniSeq:init_triangle(side, to, up, new_tile, data)
                 side_up,
                 cell.tile
             ))
+        else
+            break
         end
     end
     table.insert(
@@ -499,6 +572,11 @@ function AniSeq:init_triangle(side, to, up, new_tile, data)
 end
 
 ---Initialize the animation sequence of a diamond collapse.
+---1. up, left, and right all merge into the new cell
+---2. the new cell applies the `new_tile`
+---3. the new cell moves up (into up)
+---4. cells below `left` files up
+---5. cells below `right` files up
 ---@param left Cell
 ---@param up Cell
 ---@param right Cell
@@ -520,6 +598,8 @@ function AniSeq:init_diamond(left, up, right, to, new_tile, data)
                 left_up,
                 cell.tile
             ))
+        else
+            break
         end
     end
     for tr = right.tr + 1, ROWS do
@@ -531,6 +611,8 @@ function AniSeq:init_diamond(left, up, right, to, new_tile, data)
                 right_up,
                 cell.tile
             ))
+        else
+            break
         end
     end
     table.insert(
@@ -561,6 +643,7 @@ function AniSeq:finish()
     self.active = false
 end
 
+----[[ LOVE ]] --------------------------------------------
 
 function love.load()
     Font = love.graphics.newFont("IBM_Plex_Sans/Regular.ttf", 20)
@@ -653,29 +736,37 @@ function love.load()
         Next = 0,
     }
 
-    --- Check for collapse at new insertion position. Newly inserted tile at `Grid[tr][tc]`
+    ---Check for collapse at new insertion position. Newly inserted tile at `Grid[tr][tc]`.
+    ---This will only check a single collapse at a time.
+    ---
+    ---**Checks**:
+    ---1. Vertically up
+    ---2. Horz left
+    ---   `# %`
+    ---3. Horz right
+    ---   `% #`
+    ---4. Horz both
+    ---   `# % #`
+    ---5. Triangle right
+    ---```
+    ---   #
+    ---   % #
+    ---```
+    ---6. Triangle left
+    ---```
+    ---     #
+    ---   # %
+    ---```
+    ---7. Diamond
+    ---```
+    ---     #
+    ---   # % #
+    ---```
     ---@param tc integer
     ---@param tr integer
     ---@return boolean has_collapse
     function Collapse(tc, tr)
-        -- This will only check a single collapse at a time.
-
-        -- Checks
-        -- 1. X Single up
-        -- 2. - 2 Horz   @ #
-        -- 3. -        # @
-        -- 4. - 3 Horz # @ #
-        -- 5. - Triangle #
-        --               @ #
-        -- 6.            #
-        --             # @
-        -- 7. - 4        #
-        --             # @ #  -- Not possible under current AniMove impl!
-        -- All These must move the Right/Left tiles up,
-        -- For those columns that moved, check for collapse again.
-
         local this = Grid[tr][tc]
-        local this_coord = {tr = tr, tc = tc}
 
         --[[ 7: Diamond: top, left, right =>> this ]]--
         if tc > 1 and tc < ROWS and tr > 1 then
@@ -761,7 +852,7 @@ function love.load()
                 MaxTileValue = math.max(MaxTileValue, new_tile.value)
                 GridTops[tc] = GridTops[tc] - 1
 
-                Md.AniSeq:init_vert({this_coord}, up, new_tile, up)
+                Md.AniSeq:init_vert(up, this, new_tile, up)
                 return true
             end
         end
@@ -838,7 +929,7 @@ function Cell:draw()
     local width = TileWidth + 2 * self.enlarge
     local tile_padding_top = math.floor(TileWidth / 2 - TileFontHeight / 2)
     local text_row = self.row + tile_padding_top
-    local radius = TileWidth / 8
+    local radius = width / 8
 
     love.graphics.setColor(unpack(tile.bg))
     love.graphics.rectangle("fill", self.col - self.enlarge, self.row - self.enlarge, width, width, radius)
@@ -848,7 +939,7 @@ function Cell:draw()
 end
 
 function love.draw()
-    local radius = TileWidth / 8
+    local column_radius = TileWidth / 8
 
     --[[ Columns ]]--
 
@@ -860,7 +951,7 @@ function love.draw()
             TileGap,
             TileWidth,
             (ROWS - 1) * TileGap + ROWS * TileWidth,
-            radius
+            column_radius
         )
     end
 
