@@ -1,4 +1,17 @@
 
+---Whether all cell's tile values are equal
+---@param items Cell[]
+local function all_eq(items)
+    local prev = items[1].tile.value
+    for _, v in ipairs(items) do
+        if v.tile.value ~= prev then
+            return false
+        end
+        prev = v.tile.value
+    end
+    return true
+end
+
 ---@alias tileValue integer Positive power of 2
 ---@alias rgb number[] Float, fraction fof 255
 ---@alias hex string
@@ -399,7 +412,7 @@ end
 ---@param source Coord
 ---@param to Cell
 ---@param new_tile Tile
-function AniSeq:init_horz1(source, to, new_tile, data)
+function AniSeq:init_horz_one(source, to, new_tile, data)
     self.seq = {
         AniMove:new({source}, to, new_tile),
         AniEnlarge:new(to),
@@ -409,11 +422,10 @@ function AniSeq:init_horz1(source, to, new_tile, data)
         local cell = Grid[tr][source.tc]
         local up = Grid[tr-1][source.tc]
         if cell.tile.value > 0 then
-            table.insert(self.seq, AniMove:new(
-                {{tr = cell.tr, tc = cell.tc}},
-                up,
-                cell.tile
-            ))
+            table.insert(
+                self.seq,
+                AniMove:new({{tr = cell.tr, tc = cell.tc}}, up, cell.tile)
+            )
         end
     end
     self.active = true
@@ -426,7 +438,7 @@ end
 ---@param right Cell
 ---@param new_tile Tile
 ---@param data any
-function AniSeq:init_horz2(left, to, right, new_tile, data)
+function AniSeq:init_horz_both(left, to, right, new_tile, data)
     self.seq = {
         AniMove:new({left, right}, to, new_tile),
         AniEnlarge:new(to),
@@ -436,22 +448,20 @@ function AniSeq:init_horz2(left, to, right, new_tile, data)
         local cell = Grid[tr][left.tc]
         local up = Grid[tr-1][left.tc]
         if cell.tile.value > 0 then
-            table.insert(self.seq, AniMove:new(
-                {{tr = cell.tr, tc = cell.tc}},
-                up,
-                cell.tile
-            ))
+            table.insert(
+                self.seq,
+                AniMove:new({{tr = cell.tr, tc = cell.tc}}, up, cell.tile)
+            )
         end
     end
     for tr = right.tr + 1, ROWS do
         local cell = Grid[tr][right.tc]
         local up = Grid[tr-1][right.tc]
         if cell.tile.value > 0 then
-            table.insert(self.seq, AniMove:new(
-                {{tr = cell.tr, tc = cell.tc}},
-                up,
-                cell.tile
-            ))
+            table.insert(
+                self.seq,
+                AniMove:new({{tr = cell.tr, tc = cell.tc}}, up, cell.tile)
+            )
         end
     end
     self.active = true
@@ -459,11 +469,11 @@ function AniSeq:init_horz2(left, to, right, new_tile, data)
 end
 
 ---Initialize the animation sequence of a triangle collapse.
----@param side Cell
+---@param side Cell Any side
 ---@param to Cell
 ---@param up Cell
 ---@param new_tile Tile
-function AniSeq:init_tri(side, to, up, new_tile, data)
+function AniSeq:init_triangle(side, to, up, new_tile, data)
     self.seq = {
         AniMove:new({side, up}, to, new_tile),
         AniEnlarge:new(to),
@@ -480,11 +490,53 @@ function AniSeq:init_tri(side, to, up, new_tile, data)
             ))
         end
     end
-    table.insert(self.seq, AniMove:new(
-        {{tr = to.tr, tc = to.tc}},
-        up,
-        new_tile
-    ))
+    table.insert(
+        self.seq,
+        AniMove:new({{tr = to.tr, tc = to.tc}}, up, new_tile)
+    )
+    self.active = true
+    self.data = data
+end
+
+---Initialize the animation sequence of a diamond collapse.
+---@param left Cell
+---@param up Cell
+---@param right Cell
+---@param to Cell
+---@param new_tile Tile
+---@param data any
+function AniSeq:init_diamond(left, up, right, to, new_tile, data)
+    self.seq = {
+        AniMove:new({left, right, up}, to, new_tile),
+        AniEnlarge:new(to),
+    }
+    -- Move left/right column up
+    for tr = left.tr + 1, ROWS do
+        local cell = Grid[tr][left.tc]
+        local left_up = Grid[tr-1][left.tc]
+        if cell.tile.value > 0 then
+            table.insert(self.seq, AniMove:new(
+                {{tr = cell.tr, tc = cell.tc}},
+                left_up,
+                cell.tile
+            ))
+        end
+    end
+    for tr = right.tr + 1, ROWS do
+        local cell = Grid[tr][right.tc]
+        local right_up = Grid[tr-1][right.tc]
+        if cell.tile.value > 0 then
+            table.insert(self.seq, AniMove:new(
+                {{tr = cell.tr, tc = cell.tc}},
+                right_up,
+                cell.tile
+            ))
+        end
+    end
+    table.insert(
+        self.seq,
+        AniMove:new({{tr = to.tr, tc = to.tc}}, up, new_tile)
+    )
     self.active = true
     self.data = data
 end
@@ -626,17 +678,31 @@ function love.load()
         local this = Grid[tr][tc]
         local this_coord = {tr = tr, tc = tc}
 
-        --[[ 7: top, left, right ]]--
+        --[[ 7: Diamond: top, left, right =>> this ]]--
+        if tc > 1 and tc < ROWS and tr > 1 then
+            local left = Grid[tr][tc-1]
+            local right = Grid[tr][tc+1]
+            local up = Grid[tr-1][tc]
+            if all_eq({left, right, up, this}) then
+                local new_tile = Tile.get(this.tile.value * 8)
+                MaxTileValue = math.max(MaxTileValue, new_tile.value)
+                GridTops[tc] = GridTops[tc] - 1
+                GridTops[tc-1] = GridTops[tc-1] - 1
+                GridTops[tc+1] = GridTops[tc+1] - 1
+                Md.AniSeq:init_diamond(left, up, right, this, new_tile, up)
+                return true
+            end
+        end
         --[[ 5: left-triangle  ]]--
         if tc > 1 and tr > 1 then
             local left = Grid[tr][tc-1]
             local up = Grid[tr-1][tc]
-            if left.tile.value == up.tile.value and left.tile.value == this.tile.value then
+            if all_eq({left, up, this}) then
                 local new_tile = Tile.get(this.tile.value * 4)
                 MaxTileValue = math.max(MaxTileValue, new_tile.value)
                 GridTops[tc] = GridTops[tc] - 1
                 GridTops[tc-1] = GridTops[tc-1] - 1
-                Md.AniSeq:init_tri(left, this, up, new_tile, up)
+                Md.AniSeq:init_triangle(left, this, up, new_tile, up)
                 return true
             end
         end
@@ -644,12 +710,12 @@ function love.load()
         if tc < ROWS and tr > 1 then
             local right = Grid[tr][tc+1]
             local up = Grid[tr-1][tc]
-            if right.tile.value == up.tile.value and right.tile.value == this.tile.value then
+            if all_eq({right, up, this}) then
                 local new_tile = Tile.get(this.tile.value * 4)
                 MaxTileValue = math.max(MaxTileValue, new_tile.value)
                 GridTops[tc] = GridTops[tc] - 1
                 GridTops[tc+1] = GridTops[tc+1] - 1
-                Md.AniSeq:init_tri(right, this, up, new_tile, up)
+                Md.AniSeq:init_triangle(right, this, up, new_tile, up)
                 return true
             end
         end
@@ -657,41 +723,41 @@ function love.load()
         if tc > 1 and tc < ROWS then
             local left = Grid[tr][tc-1]
             local right = Grid[tr][tc+1]
-            if right.tile.value == this.tile.value and left.tile.value == right.tile.value then
+            if all_eq({left, right, this}) then
                 local new_tile = Tile.get(this.tile.value * 4)
                 MaxTileValue = math.max(MaxTileValue, new_tile.value)
                 GridTops[tc+1] = GridTops[tc+1] - 1
                 GridTops[tc-1] = GridTops[tc-1] - 1
-                Md.AniSeq:init_horz2(left, this, right, new_tile, this)
+                Md.AniSeq:init_horz_both(left, this, right, new_tile, this)
                 return true
             end
         end
         --[[ 2: Horz left -> into this ]]--
         if tc > 1 then
             local left = Grid[tr][tc-1]
-            if left.tile.value == this.tile.value then
+            if all_eq({left, this}) then
                 local new_tile = Tile.get(this.tile.value * 2)
                 MaxTileValue = math.max(MaxTileValue, new_tile.value)
                 GridTops[tc-1] = GridTops[tc-1] - 1
-                Md.AniSeq:init_horz1({tr = left.tr, tc = left.tc}, this, new_tile, this)
+                Md.AniSeq:init_horz_one({tr = left.tr, tc = left.tc}, this, new_tile, this)
                 return true
             end
         end
         --[[ 3: Horz this <- right ]]--
         if tc < ROWS then
             local right = Grid[tr][tc+1]
-            if right.tile.value == this.tile.value then
+            if all_eq({right, this}) then
                 local new_tile = Tile.get(this.tile.value * 2)
                 MaxTileValue = math.max(MaxTileValue, new_tile.value)
                 GridTops[tc+1] = GridTops[tc+1] - 1
-                Md.AniSeq:init_horz1({tr = right.tr, tc = right.tc}, this, new_tile, this)
+                Md.AniSeq:init_horz_one({tr = right.tr, tc = right.tc}, this, new_tile, this)
                 return true
             end
         end
         --[[ 1: vertical ]]--
         if tr > 1 then
             local up = Grid[tr-1][tc]
-            if up.tile.value == this.tile.value then
+            if all_eq({up, this}) then
                 local new_tile = Tile.get(this.tile.value * 2)
                 MaxTileValue = math.max(MaxTileValue, new_tile.value)
                 GridTops[tc] = GridTops[tc] - 1
