@@ -649,7 +649,6 @@ function love.load()
     -- Model. Structure of globals that might change.
     Md = {
         AniSeq = AniSeq:new(),
-        -- TODO
         AniEntrance = AniEntrance:new(),
         Next = 0,
     }
