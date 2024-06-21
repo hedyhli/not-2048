@@ -273,6 +273,29 @@ function AniMove:next()
     return done
 end
 
+---Set destination Cell to have the new tile, make those moving cells empty tiles.
+---Client responsible for calling `Collapse(self.final.tc, self.final.tr)`.
+---@return AniCell[] finished_cells
+function AniMove:finish()
+    self.final.tile = self.new_tile
+    self.active = false
+    local finished = {}
+    local finished_keys = {}
+    for k, ac in pairs(self.anim_cells) do
+        if ac.done then
+            ac.target.tile = Tile:new(0, {})
+            ac.target.row = ac.initial.row
+            ac.target.col = ac.initial.col
+            table.insert(finished, ac)
+            table.insert(finished_keys, k)
+        end
+    end
+    for _, key in ipairs(finished_keys) do
+        self.anim_cells[key] = nil
+    end
+    return finished
+end
+
 ---@type AniEntrance
 local AniEntrance = {}
 
@@ -320,29 +343,6 @@ function AniEntrance:finish()
     -- HACK: Not sensibly resetting to previous values
     State = "begin"
     Message = "yay"
-end
-
----Set destination Cell to have the new tile, make those moving cells empty tiles.
----Client responsible for calling `Collapse(self.final.tc, self.final.tr)`.
----@return AniCell[] finished_cells
-function AniMove:finish()
-    self.final.tile = self.new_tile
-    self.active = false
-    local finished = {}
-    local finished_keys = {}
-    for k, ac in pairs(self.anim_cells) do
-        if ac.done then
-            ac.target.tile = Tile:new(0, {})
-            ac.target.row = ac.initial.row
-            ac.target.col = ac.initial.col
-            table.insert(finished, ac)
-            table.insert(finished_keys, k)
-        end
-    end
-    for _, key in ipairs(finished_keys) do
-        self.anim_cells[key] = nil
-    end
-    return finished
 end
 
 ---@type AniEnlarge
@@ -416,6 +416,18 @@ function AniSeq:init_horz1(source, to, new_tile, data)
         AniMove:new({source}, to, new_tile),
         AniEnlarge:new(to),
     }
+    -- Move whole column on the left/right up
+    for tr = source.tr + 1, ROWS do
+        local cell = Grid[tr][source.tc]
+        local up = Grid[tr-1][source.tc]
+        if cell.tile.value > 0 then
+            table.insert(self.seq, AniMove:new(
+                {{tr = cell.tr, tc = cell.tc}},
+                up,
+                cell.tile
+            ))
+        end
+    end
     self.active = true
     self.data = data
 end
@@ -430,6 +442,29 @@ function AniSeq:init_horz2(left, to, right, new_tile, data)
         AniMove:new({left, right}, to, new_tile),
         AniEnlarge:new(to),
     }
+    -- Move both columns up
+    for tr = left.tr + 1, ROWS do
+        local cell = Grid[tr][left.tc]
+        local up = Grid[tr-1][left.tc]
+        if cell.tile.value > 0 then
+            table.insert(self.seq, AniMove:new(
+                {{tr = cell.tr, tc = cell.tc}},
+                up,
+                cell.tile
+            ))
+        end
+    end
+    for tr = right.tr + 1, ROWS do
+        local cell = Grid[tr][right.tc]
+        local up = Grid[tr-1][right.tc]
+        if cell.tile.value > 0 then
+            table.insert(self.seq, AniMove:new(
+                {{tr = cell.tr, tc = cell.tc}},
+                up,
+                cell.tile
+            ))
+        end
+    end
     self.active = true
     self.data = data
 end
