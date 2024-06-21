@@ -161,7 +161,7 @@ function InitGrid()
     local row = TileGap
     for tr = 1, ROWS do
         Grid[tr] = {}
-        local col = TileGap
+        local col = Margins
         for tc = 1, ROWS do
             Grid[tr][tc] = Cell:new(
                 Tile:new(0, {}),
@@ -644,6 +644,56 @@ function AniSeq:finish()
 end
 
 ----[[ LOVE ]] --------------------------------------------
+--[[
+
+M|TTTT|G|TTTT|G|TTTT|G|TTTT|G|TTTT|M
+ 
+M|TTTT|G|TTTT|G|TTTT|G|TTTT|G|TTTT|M
+ 
+M|TTTT|G|TTTT|G|TTTT|G|TTTT|G|TTTT|M
+ 
+M|TTTT|G|TTTT|G|TTTT|G|TTTT|G|TTTT|M
+ 
+M|TTTT|G|TTTT|G|TTTT|G|TTTT|G|TTTT|M
+ 
+M|TTTT|G|TTTT|G|TTTT|G|TTTT|G|TTTT|M
+
+Text text
+
+--]]
+
+function RecalculateDimensions()
+    local _, _, fullW, fullH = love.window.getSafeArea()
+    local minMargins = 5
+    -- Maximum possible width to fit all cells
+    local tile_max_width = math.floor((fullW - minMargins * 2 - (ROWS - 1) * TileGap) / ROWS)
+    TileWidth = math.min(tile_max_width, 90)
+    Margins = math.floor((fullW - (ROWS - 1) * TileGap - ROWS * TileWidth) / 2)
+
+    Columns = {
+        top = TileGap,
+        bot = TileGap + ROWS * (TileGap + TileWidth),
+        cols = {}
+    }
+    local col = Margins
+    for y = 1, ROWS do
+        Columns.cols[y] = {col, col + TileWidth}
+        col = col + TileWidth + TileGap
+    end
+
+    if Grid then
+        local row = TileGap
+        for tr = 1, ROWS do
+            col = Margins
+            for tc = 1, ROWS do
+                Grid[tr][tc].col = col
+                Grid[tr][tc].row = row
+                col = col + TileWidth + TileGap
+            end
+            row = row + TileWidth + TileGap
+        end
+    end
+end
 
 function love.load()
     Font = love.graphics.newFont("IBM_Plex_Sans/Regular.ttf", 20)
@@ -656,23 +706,13 @@ function love.load()
 
     -- Game Params
     ROWS = 5
+    TileGap = 10
     ---@type tileValue
     NextTileValue = 2
     ---@type tileValue
     MaxTileValue = 2
-    TileWidth = 90
-    TileGap = 10
 
-    ---Computed
-    Columns = {
-        top = TileGap,
-        bot = ROWS * (TileGap + TileWidth),
-        cols = {}
-    }
-    for y = 1, ROWS do
-        local col_end = y * (TileGap + TileWidth)
-        Columns.cols[y] = {col_end - TileWidth, col_end}
-    end
+    RecalculateDimensions()
 
     Message = "Press a number key 1 to 5"
     ---@type "begin"|"animating"|"end"
@@ -939,6 +979,7 @@ function Cell:draw()
 end
 
 function love.draw()
+    RecalculateDimensions()
     local column_radius = TileWidth / 8
 
     --[[ Columns ]]--
@@ -947,10 +988,10 @@ function love.draw()
     for y = 1, ROWS do
         love.graphics.rectangle(
             'fill',
-            y * TileGap + (y - 1) * TileWidth,
-            TileGap,
+            Columns.cols[y][1],
+            Columns.top,
             TileWidth,
-            (ROWS - 1) * TileGap + ROWS * TileWidth,
+            Columns.bot - Columns.top,
             column_radius
         )
     end
@@ -980,7 +1021,7 @@ function love.draw()
     --[[ Debug info ]]--
 
     love.graphics.setColor(1, 1, 1)
-    local col = TileGap
+    local col = Margins
     for x = 1, ROWS do
         love.graphics.printf(tostring(GridTops[x]), col, row, TileWidth, "center")
         col = col + TileWidth + TileGap
@@ -991,9 +1032,9 @@ function love.draw()
 
     love.graphics.setColor(1, 1, 1)
     row = row + FontHeight
-    love.graphics.print("Next: " .. tostring(NextTileValue), 10, row)
+    love.graphics.print("Next: " .. tostring(NextTileValue), Margins, row)
     row = row + FontHeight
-    love.graphics.print(Message, 10, row)
+    love.graphics.print(Message, Margins, row)
 end
 
 function love.keypressed(key)
