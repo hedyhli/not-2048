@@ -439,6 +439,46 @@ function AniEnlarge:finish()
     self.active = false
 end
 
+---@type AniNext
+local AniNext = {}
+
+---@class AniNext
+---@field cell Cell Changes the .enlarge field representing scaling factor
+---@field active boolean
+
+---@param cell Cell
+function AniNext:new(cell)
+    return setmetatable({
+        cell = cell,
+        active = false,
+    }, { __index = AniNext })
+end
+
+function AniNext:start()
+    -- self.cell.enlarge = - math.floor(NextTileWidth / 3)
+    self.cell.alpha = 0.3
+    self.active = true
+end
+
+---@return boolean done
+function AniNext:next()
+    -- self.cell.enlarge = self.cell.enlarge + 2
+    -- if self.cell.enlarge > 0 then
+    --     return true
+    -- end
+    self.cell.alpha = self.cell.alpha + 0.03
+    if self.cell.alpha > 1 then
+        return true
+    end
+    return false
+end
+
+function AniNext:finish()
+    self.cell.enlarge = 0
+    self.cell.alpha = 1
+    self.active = false
+end
+
 ---@type AniSeq
 local AniSeq = {}
 
@@ -671,6 +711,8 @@ function RecalculateDimensions()
     TileWidth = math.min(tile_max_width, 90)
     Margins = math.floor((fullW - (ROWS - 1) * TileGap - ROWS * TileWidth) / 2)
 
+    NextTileWidth = math.floor(TileWidth / 4 * 3)
+
     Columns = {
         top = TileGap,
         bot = TileGap + ROWS * (TileGap + TileWidth),
@@ -693,6 +735,14 @@ function RecalculateDimensions()
             end
             row = row + TileWidth + TileGap
         end
+    end
+
+    if Md and Md.NextCell then
+        local cell = Md.NextCell
+        local row = Columns.bot + FontHeight
+        local next_width = Font:getWidth("Next: ")
+        cell.row = row
+        cell.col = next_width + math.floor(NextTileWidth / 2)
     end
 end
 
@@ -774,8 +824,10 @@ function love.load()
     Md = {
         AniSeq = AniSeq:new(),
         AniEntrance = AniEntrance:new(),
-        Next = 0,
+        NextCell = Cell:new(Tile.get(NextTileValue), {}, {}),
     }
+
+    Md.AniNext = AniNext:new(Md.NextCell)
 
     ---Check for collapse at new insertion position. Newly inserted tile at `Grid[tr][tc]`.
     ---This will only check a single collapse at a time.
@@ -907,19 +959,22 @@ function love.load()
         ---@type tileValue
         NextTileValue = 2 ^ math.random(math.log(cap))
         -- INFO: Use this for quickly producing large tiles for debugging.
-        -- Next = cap
+        -- NextTileValue = cap
+        Md.NextCell.tile = Tile.get(NextTileValue)
+        Md.AniNext:start()
     end
 
     ---@param tc integer
     function InsertTileAt(tc)
         if Md.AniEntrance.active or Md.AniSeq.active then
-            Message = "Please wait for animation to finish"
+            Message = "Please wait"
             return
         end
 
         local tr = GridTops[tc]
         if tr <= ROWS then
             Grid[tr][tc].tile = Tile.get(NextTileValue)
+            -- Md.NextCell.tile = nil
             GridTops[tc] = tr + 1
             -- Defers collapsing & updating next to after animation finishes.
             -- See `love.update`.
@@ -929,15 +984,23 @@ function love.load()
             if Grid[ROWS][tc].tile.value == NextTileValue then
                 Grid[ROWS][tc].tile = Tile.get(NextTileValue * 2)
                 Collapse(tc, ROWS)
-                Message = "Phew!"
+                Message = ":D"
             else
-                Message = "Row is full and incollapsible!"
+                Message = "Row is full!"
             end
         end
     end
+
+    UpdateNext()
 end
 
 function love.update(_)
+    if Md.AniNext.active then
+        local done = Md.AniNext:next()
+        if done then
+            Md.AniNext:finish()
+        end
+    end
     if Md.AniEntrance.active then
         local done = Md.AniEntrance:next()
         if done then
@@ -964,6 +1027,25 @@ function love.update(_)
     end
 end
 
+function Cell._draw(tile, font, row, col, width, radius, text_row, alpha)
+    if alpha ~= nil then
+        love.graphics.setColor(tile.bg[1], tile.bg[2], tile.bg[3], alpha)
+    else
+        love.graphics.setColor(unpack(tile.bg))
+    end
+    love.graphics.rectangle("fill", col, row, width, width, radius)
+    love.graphics.setColor(0, 0, 0, 1)
+
+    if width > font:getHeight() then
+        if alpha ~= nil then
+            love.graphics.setColor(tile.fg[1], tile.fg[2], tile.fg[3], alpha)
+        else
+            love.graphics.setColor(unpack(tile.fg))
+        end
+        love.graphics.printf(tile.text, font, col, text_row, width, "center")
+    end
+end
+
 ---Draw a single tile with the correct background and text.
 function Cell:draw()
     local tile = self.tile
@@ -971,26 +1053,42 @@ function Cell:draw()
     local tile_padding_top = math.floor(TileWidth / 2 - TileFontHeight / 2)
     local text_row = self.row + self.o_r + tile_padding_top
     local radius = width / 8
-
-    love.graphics.setColor(unpack(tile.bg))
-    love.graphics.rectangle(
-        "fill",
-        self.col + self.o_c - self.enlarge,
-        self.row + self.o_r - self.enlarge,
-        width,
-        width,
-        radius
-    )
-
-    love.graphics.setColor(unpack(tile.fg))
-    love.graphics.printf(
-        tile.text,
+    Cell._draw(
+        tile,
         TileFont,
-        self.col + self.o_c,
-        text_row,
-        TileWidth,
-        "center"
+        self.row + self.o_r - self.enlarge,
+        self.col + self.o_c - self.enlarge,
+        width,
+        radius,
+        text_row
     )
+end
+
+---Draw Md.NextCell
+---@return integer Height
+function Cell:draw_next()
+    local full_width = NextTileWidth
+    local width = full_width + 2 * self.enlarge
+
+    if self.tile == nil then
+        return full_width
+    end
+
+    local tile_padding_top = math.floor(width / 2 - FontHeight / 2)
+    local text_row = self.row - self.enlarge + tile_padding_top
+    local radius = full_width / 8
+
+    Cell._draw(
+        self.tile,
+        Font,
+        self.row - self.enlarge,
+        self.col - self.enlarge,
+        width,
+        radius,
+        text_row,
+        self.alpha
+    )
+    return full_width
 end
 
 function love.draw()
@@ -1030,27 +1128,26 @@ function love.draw()
     if Count == ROWS ^ 2 and State ~= "end" then
         State = "end"
         -- Avoids overwriting new messages on top
-        Message = "GAME OVER"
+        -- Message = "GAME OVER"
     end
-
-    --[[ Debug info ]]--
-
-    row = row + FontHeight
-    love.graphics.setColor(1, 1, 1)
-    local col = Margins
-    for x = 1, ROWS do
-        love.graphics.printf(tostring(GridTops[x]), col, row, TileWidth, "center")
-        col = col + TileWidth + TileGap
-    end
-    row = row + TileGap + FontHeight
 
     --[[ Next & messages ]]--
 
     love.graphics.setColor(1, 1, 1)
-    row = row + FontHeight
-    love.graphics.print("Next: " .. tostring(NextTileValue), Margins, row)
-    row = row + FontHeight
+    row = row + FontHeight + math.floor(NextTileWidth / 2)
+    love.graphics.print("Next: ", Margins, row)
+    row = row + Cell.draw_next(Md.NextCell)
     love.graphics.print(Message, Margins, row)
+
+    --[[ Debug info ]]--
+
+    -- love.graphics.setColor(1, 1, 1)
+    -- local col = Margins
+    -- for x = 1, ROWS do
+    --     love.graphics.printf(tostring(GridTops[x]), col, row, TileWidth, "center")
+    --     col = col + TileWidth + TileGap
+    -- end
+    -- row = row + TileGap + FontHeight
 end
 
 function love.keypressed(key)

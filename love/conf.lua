@@ -5,12 +5,12 @@ function love.conf(t)
     t.console = false                   -- Attach a console (boolean, Windows only)
     t.accelerometerjoystick = true      -- Enable the accelerometer on iOS and Android by exposing it as a Joystick (boolean)
     t.externalstorage = false           -- True to save files (and read from the save directory) in external storage on Android (boolean)
-    t.gammacorrect = false              -- Enable gamma-correct rendering, when supported by the system (boolean)
+    t.gammacorrect = true               -- Enable gamma-correct rendering, when supported by the system (boolean)
 
     t.audio.mic = false                 -- Request and use microphone capabilities in Android (boolean)
     t.audio.mixwithsystem = true        -- Keep background music playing when opening LOVE (boolean, iOS and Android only)
 
-    t.window.title = "2048-twist"       -- The window title (string)
+    t.window.title = "not-2048"         -- The window title (string)
     t.window.icon = nil                 -- Filepath to an image to use as the window's icon (string)
     -- 10: gaps between tiles and margin of frame
     -- 90: tile width
@@ -19,8 +19,8 @@ function love.conf(t)
     t.window.height = 650
     t.window.borderless = false         -- Remove all border visuals from the window (boolean)
     t.window.resizable = true           -- Let the window be user-resizable (boolean)
-    t.window.minwidth = 1               -- Minimum window width if the window is resizable (number)
-    t.window.minheight = 1              -- Minimum window height if the window is resizable (number)
+    t.window.minwidth = 150             -- Minimum window width if the window is resizable (number)
+    t.window.minheight = 200            -- Minimum window height if the window is resizable (number)
     t.window.fullscreen = false         -- Enable fullscreen (boolean)
     t.window.fullscreentype = "desktop" -- Choose between "desktop" fullscreen or "exclusive" fullscreen mode (string)
     t.window.vsync = 1                  -- Vertical sync mode (number)
