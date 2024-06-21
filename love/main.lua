@@ -104,6 +104,7 @@ local Cell = {}
 ---@field col integer Position
 ---@field tr integer Coords
 ---@field tc integer Coords
+---@field enlarge number Pixels added onto widths
 ---@field tile Tile The styling, text, and value
 
 -- WARN: Should not ever be used after `InitGrid`.
@@ -117,6 +118,7 @@ function Cell:new(tile, coord, pos)
         tc = coord.tc,
         row = pos.row,
         col = pos.col,
+        enlarge = 0,
     }, { __index = Cell })
 end
 
@@ -346,6 +348,42 @@ function AniMove:finish()
     return finished
 end
 
+---@type AniEnlarge
+local AniEnlarge = {}
+
+---@class AniEnlarge
+---@field cell Cell
+---@field active boolean
+---@field delta number
+
+function AniEnlarge:new()
+    return setmetatable({
+        cell = nil,
+        active = false,
+        delta = 0,
+    }, { __index = AniEnlarge })
+end
+
+function AniEnlarge:init(cell)
+    self.cell = cell
+    self.active = true
+    self.delta = 1
+end
+
+---@return boolean done
+function AniEnlarge:next()
+    self.cell.enlarge = self.cell.enlarge + self.delta
+    if self.cell.enlarge > 3 then
+        self.delta = - self.delta
+    end
+    if self.cell.enlarge < 0 then
+        self.cell.enlarge = 0
+        self.active = false
+        return true
+    end
+    return false
+end
+
 
 function love.load()
     Font = love.graphics.newFont("IBM_Plex_Sans/Regular.ttf", 20)
@@ -434,6 +472,7 @@ function love.load()
     -- Model. Structure of globals that might change.
     Md = {
         AniMove = AniMove:new(),
+        AniEnlarge = AniEnlarge:new(),
         -- TODO
         AniEntrance = AniEntrance:new(),
         Next = 0,
@@ -538,6 +577,11 @@ function love.update(_)
             --   Because now Left will have a different new_tile/final than
             --   Right.
             local _ = Md.AniMove:finish()
+            Md.AniEnlarge:init(Md.AniMove.final)
+        end
+    end
+    if Md.AniEnlarge.active then
+        if Md.AniEnlarge:next() then
             local has_collapse = Collapse(Md.AniMove.final.tc, Md.AniMove.final.tr)
             -- for _, ac in ipairs(finished) do
             --     has_collapse = Collapse(ac.target.tc, ac.target.tr)
@@ -552,12 +596,13 @@ end
 ---Draw a single tile with the correct background and text.
 function Cell:draw()
     local tile = self.tile
+    local width = TileWidth + 2 * self.enlarge
     local tile_padding_top = math.floor(TileWidth / 2 - TileFontHeight / 2)
     local text_row = self.row + tile_padding_top
     local radius = TileWidth / 8
 
     love.graphics.setColor(unpack(tile.bg))
-    love.graphics.rectangle("fill", self.col, self.row, TileWidth, TileWidth, radius)
+    love.graphics.rectangle("fill", self.col - self.enlarge, self.row - self.enlarge, width, width, radius)
 
     love.graphics.setColor(unpack(tile.fg))
     love.graphics.printf(tile.text, TileFont, self.col, text_row, TileWidth, "center")
