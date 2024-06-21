@@ -1,6 +1,6 @@
 -- TODO:
 -- X Rewrite entrance anim
--- X Set AnimCell.delta intelligently
+-- X Set AniCell.delta intelligently
 -- - Check either left or right horizontal collapse
 -- - Check both collapse
 -- - Profit!
@@ -8,8 +8,8 @@
 -- Global:
 --   Grid, GetTile
 -- Model:
---   AnimMerge
---   AnimEntrance
+--   AniMove
+--   AniEntrance
 
 ---@alias tileValue integer Positive power of 2
 ---@alias rgb number[] Float, fraction fof 255
@@ -148,21 +148,21 @@ function InitGrid()
     end
 end
 
----@class AnimCell A moving cell
-local AnimCell = {}
+---@class AniCell A moving cell
+local AniCell = {}
 
----@class AnimCell
+---@class AniCell
 ---@field target Cell Reference to Grid[coord.tr][coord.tc]. The cell to be modified
 ---@field dest Position Destination Cell.row+col (SHOULD BE IMMUTABLE)
 ---@field initial Position
 ---@field delta {dr: integer, dc: integer} Added to row/col of `dest` (NOT coords)
 ---@field done boolean
 
----Create an AnimCell instance using from and to coords.
--- NOTE: Not to be used directly! Use `AnimMerge:new` instead
+---Create an AniCell instance using from and to coords.
+-- NOTE: Not to be used directly! Use `AniMove:new` instead
 ---@param coord Coord Current position
 ---@param dest_coord Coord Destination position
-function AnimCell:new(coord, dest_coord)
+function AniCell:new(coord, dest_coord)
     local dest = Grid[dest_coord.tr][dest_coord.tc]
     local target = Grid[coord.tr][coord.tc]
     local delta = {dr = 0, dc = 0}
@@ -184,13 +184,13 @@ function AnimCell:new(coord, dest_coord)
         initial = {row = target.row, col = target.col},
         delta = delta,
         done = false,
-    }, { __index = AnimCell })
+    }, { __index = AniCell })
 end
 
 ---Update position of `self.target`, return whether this should be the last update.
--- NOTE: Note to be called directly! Use `AnimMerge:next` instead to update in batch.
+-- NOTE: Note to be called directly! Use `AniMove:next` instead to update in batch.
 ---@return boolean ended Animation has ended
-function AnimCell:next()
+function AniCell:next()
     local dr, dc = self.delta.dr, self.delta.dc
     local nrow, ncol = self.target.row + dr, self.target.col + dc
 
@@ -212,35 +212,35 @@ function AnimCell:next()
     return false
 end
 
----@type AnimMerge A merge-tile animation for collapses. SINGLETON
-local AnimMerge = {}
+---@type AniMove A merge-tile animation for collapses. SINGLETON
+local AniMove = {}
 
----@class AnimMerge
----@field anim_cells AnimCell[] Animation information
+---@class AniMove
+---@field anim_cells AniCell[] Animation information
 ---@field final Cell The final state of the `Cell` which the `cells` have merged into.
 ---@field new_tile Tile The tile to put into the `final` Cell after animation finishes
 ---@field active boolean Whether animation is running and should call `:next`
 
----Create the single AnimMerge instance to be used throughout the game.
-function AnimMerge:new()
+---Create the single AniMove instance to be used throughout the game.
+function AniMove:new()
     return setmetatable({
         anim_cells = {},
         final = nil,
         new_tile = nil,
         active = false,
-    }, { __index = AnimMerge })
+    }, { __index = AniMove })
 end
 
 ---@param sources Coord[]
 ---@param final Cell
 ---@param new_tile Tile
-function AnimMerge:init(sources, final, new_tile)
+function AniMove:init(sources, final, new_tile)
     local dest_coord = {tr = final.tr, tc = final.tc}
 
-    ---@type AnimCell[]
+    ---@type AniCell[]
     local anim_cells = {}
     for _, src_coord in ipairs(sources) do
-        table.insert(anim_cells, AnimCell:new(src_coord, dest_coord))
+        table.insert(anim_cells, AniCell:new(src_coord, dest_coord))
     end
 
     self.anim_cells = anim_cells
@@ -250,7 +250,7 @@ function AnimMerge:init(sources, final, new_tile)
 end
 
 ---@return boolean done Whether this animation set is fully complete.
----The client should call `AnimMerge:finish` if this method returns true.
+---The client should call `AniMove:finish` if this method returns true.
 -- WARN: Client reponsible for checking whether animation is active before calling
 -- this function!
 --
@@ -264,7 +264,7 @@ end
 --   end
 -- end
 -- ```
-function AnimMerge:next()
+function AniMove:next()
     local done = false
     for _, ac in pairs(self.anim_cells) do
         -- All should be assumed to end at the same time.
@@ -274,25 +274,25 @@ function AnimMerge:next()
     return done
 end
 
----@type AnimEntrance
-local AnimEntrance = {}
+---@type AniEntrance
+local AniEntrance = {}
 
----@class AnimEntrance
+---@class AniEntrance
 ---@field dest Position Destination position
 ---@field target Cell The actual cell (reference) that is moved
 ---@field active boolean
 
 ---Initialize the singleton.
-function AnimEntrance:new()
+function AniEntrance:new()
     return setmetatable({
         dest = nil,
         target = nil,
         active = false,
-    }, { __index = AnimEntrance })
+    }, { __index = AniEntrance })
 end
 
 ---@param cell Cell To be inserted
-function AnimEntrance:init(cell)
+function AniEntrance:init(cell)
     local dest = {row = cell.row, col = cell.col}
     local target = cell
     -- Position of bottomost cell + half of tilewidth further bottom.
@@ -306,7 +306,7 @@ end
 
 ---Client responsible for calling `:finish()` if done
 ---@return boolean done
-function AnimEntrance:next()
+function AniEntrance:next()
     local nrow = self.target.row - 40
     if nrow < self.dest.row then
         return true
@@ -315,7 +315,7 @@ function AnimEntrance:next()
     return false
 end
 
-function AnimEntrance:finish()
+function AniEntrance:finish()
     self.active = false
     self.target.row = self.dest.row
     -- HACK: Not sensibly resetting to previous values
@@ -325,8 +325,8 @@ end
 
 ---Set destination Cell to have the new tile, make those moving cells empty tiles.
 ---Client responsible for calling `Collapse(self.final.tc, self.final.tr)`.
----@return AnimCell[] finished_cells
-function AnimMerge:finish()
+---@return AniCell[] finished_cells
+function AniMove:finish()
     self.final.tile = self.new_tile
     self.active = false
     local finished = {}
@@ -433,9 +433,9 @@ function love.load()
     --[[ Model ]]--
     -- Model. Structure of globals that might change.
     Md = {
-        AnimMerge = AnimMerge:new(),
+        AniMove = AniMove:new(),
         -- TODO
-        AnimEntrance = AnimEntrance:new(),
+        AniEntrance = AniEntrance:new(),
         Next = 0,
     }
 
@@ -454,7 +454,7 @@ function love.load()
         -- 5. - Triangle #
         --               @ #
         -- 6. - 4        #
-        --             # @ #  -- Not possible under current AnimMerge impl!
+        --             # @ #  -- Not possible under current AniMove impl!
         -- All These must move the Right/Left tiles up,
         -- For those columns that moved, check for collapse again.
 
@@ -470,7 +470,7 @@ function love.load()
             MaxTileValue = math.max(MaxTileValue, new_tile.value)
             GridTops[tc] = GridTops[tc] - 1
 
-            Md.AnimMerge:init({{tr = tr, tc = tc}}, up, new_tile)
+            Md.AniMove:init({{tr = tr, tc = tc}}, up, new_tile)
             return true
         end
         return false
@@ -491,7 +491,7 @@ function love.load()
             Message = "Game is already over. Get over it!"
             return
         end
-        if State == "animating" or Md.AnimMerge.active then
+        if State == "animating" or Md.AniMove.active then
             Message = "Please wait for animation to finish"
             return
         end
@@ -502,7 +502,7 @@ function love.load()
             GridTops[col] = row + 1
             -- Defers collapsing & updating next to after animation finishes.
             -- See `love.update`.
-            Md.AnimEntrance:init(Grid[row][col])
+            Md.AniEntrance:init(Grid[row][col])
             Message = "Yay"
         else
             if Grid[ROWS][col].tile.value == NextTileValue then
@@ -517,28 +517,28 @@ function love.load()
 end
 
 function love.update(_)
-    if Md.AnimEntrance.active then
-        local done = Md.AnimEntrance:next()
+    if Md.AniEntrance.active then
+        local done = Md.AniEntrance:next()
         if done then
-            Md.AnimEntrance:finish()
-            if not Collapse(Md.AnimEntrance.target.tc, Md.AnimEntrance.target.tr) then
+            Md.AniEntrance:finish()
+            if not Collapse(Md.AniEntrance.target.tc, Md.AniEntrance.target.tr) then
                 UpdateNext()
             end
         end
     end
-    if Md.AnimMerge.active then
-        local done = Md.AnimMerge:next()
+    if Md.AniMove.active then
+        local done = Md.AniMove:next()
         if done then
-            -- Several AnimMerges or singleton?
+            -- Several AniMoves or singleton?
             -- CONFLICT:
-            -- :finish() sets new_tile to AnimMerge.final Cell
+            -- :finish() sets new_tile to AniMove.final Cell
             -- - Horizontal merges can trigger multiple subsequent merges
             -- - Left might have a merge going on at the same time as a right
             --   merge. Should they each have a :finish()?
             --   Because now Left will have a different new_tile/final than
             --   Right.
-            local _ = Md.AnimMerge:finish()
-            local has_collapse = Collapse(Md.AnimMerge.final.tc, Md.AnimMerge.final.tr)
+            local _ = Md.AniMove:finish()
+            local has_collapse = Collapse(Md.AniMove.final.tc, Md.AniMove.final.tr)
             -- for _, ac in ipairs(finished) do
             --     has_collapse = Collapse(ac.target.tc, ac.target.tr)
             -- end
