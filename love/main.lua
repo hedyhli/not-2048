@@ -202,10 +202,10 @@ function AniCell:next()
     if dr < 0 and (nrow < self.dest.row) then
         return true
     end
-    if dc > 0 and (ncol > self.dest.row) then
+    if dc > 0 and (ncol > self.dest.col) then
         return true
     end
-    if dc < 0 and (ncol < self.dest.row) then
+    if dc < 0 and (ncol < self.dest.col) then
         return true
     end
 
@@ -407,6 +407,33 @@ function AniSeq:init_vert(sources, to, new_tile, data)
     self.data = data
 end
 
+---Initialize the animation sequence of a horizontal collapse from one side
+---@param source Coord
+---@param to Cell
+---@param new_tile Tile
+function AniSeq:init_horz1(source, to, new_tile, data)
+    self.seq = {
+        AniMove:new({source}, to, new_tile),
+        AniEnlarge:new(to),
+    }
+    self.active = true
+    self.data = data
+end
+
+---Initialize the animation sequence of a horizontal collapse from BOTH sides
+---@param left Cell
+---@param to Cell
+---@param right Cell
+---@param new_tile Tile
+function AniSeq:init_horz2(left, to, right, new_tile, data)
+    self.seq = {
+        AniMove:new({left, right}, to, new_tile),
+        AniEnlarge:new(to),
+    }
+    self.active = true
+    self.data = data
+end
+
 ---@return boolean done
 function AniSeq:next()
     local done = false
@@ -540,20 +567,56 @@ function love.load()
         -- For those columns that moved, check for collapse again.
 
         local this = Grid[tr][tc]
-        if tr <= 1 then
-            return false
+        local this_coord = {tr = tr, tc = tc}
+
+        --[[ 1: vertical ]]--
+        if tr > 1 then
+            local up = Grid[tr-1][tc]
+            if up.tile.value == this.tile.value then
+                local new_tile = Tile.get(this.tile.value * 2)
+                MaxTileValue = math.max(MaxTileValue, new_tile.value)
+                GridTops[tc] = GridTops[tc] - 1
+
+                Md.AniSeq:init_vert({this_coord}, up, new_tile, up)
+                return true
+            end
+        end
+        --[[ 4: Horz left -> this <- right ]]--
+        if tc > 1 and tc < ROWS then
+            local left = Grid[tr][tc-1]
+            local right = Grid[tr][tc+1]
+            if right.tile.value == this.tile.value and left.tile.value == right.tile.value then
+                local new_tile = Tile.get(this.tile.value * 4)
+                MaxTileValue = math.max(MaxTileValue, new_tile.value)
+                GridTops[tc+1] = GridTops[tc+1] - 1
+                GridTops[tc-1] = GridTops[tc-1] - 1
+                Md.AniSeq:init_horz2(left, this, right, new_tile, this)
+                return true
+            end
+        end
+        --[[ 2: Horz left -> into this ]]--
+        if tc > 1 then
+            local left = Grid[tr][tc-1]
+            if left.tile.value == this.tile.value then
+                local new_tile = Tile.get(this.tile.value * 2)
+                MaxTileValue = math.max(MaxTileValue, new_tile.value)
+                GridTops[tc-1] = GridTops[tc-1] - 1
+                Md.AniSeq:init_horz1({tr = left.tr, tc = left.tc}, this, new_tile, this)
+                return true
+            end
+        end
+        --[[ 3: Horz this <- right ]]--
+        if tc < ROWS then
+            local right = Grid[tr][tc+1]
+            if right.tile.value == this.tile.value then
+                local new_tile = Tile.get(this.tile.value * 2)
+                MaxTileValue = math.max(MaxTileValue, new_tile.value)
+                GridTops[tc+1] = GridTops[tc+1] - 1
+                Md.AniSeq:init_horz1({tr = right.tr, tc = right.tc}, this, new_tile, this)
+                return true
+            end
         end
 
-        --[[ 1 ]]--
-        local up = Grid[tr-1][tc]
-        if up.tile.value == this.tile.value then
-            local new_tile = Tile.get(this.tile.value * 2)
-            MaxTileValue = math.max(MaxTileValue, new_tile.value)
-            GridTops[tc] = GridTops[tc] - 1
-
-            Md.AniSeq:init_vert({{tr = tr, tc = tc}}, up, new_tile, up)
-            return true
-        end
         return false
     end
 
@@ -611,12 +674,14 @@ function love.update(_)
         local done = Md.AniSeq:next()
         if done then
             Md.AniSeq:finish()
-            local has_collapse = Collapse(Md.AniSeq.data.tc, Md.AniSeq.data.tr)
-            -- for _, ac in ipairs(finished) do
-            --     has_collapse = Collapse(ac.target.tc, ac.target.tr)
-            -- end
-            if not has_collapse then
-                UpdateNext()
+            if Md.AniSeq.data then
+                local has_collapse = Collapse(Md.AniSeq.data.tc, Md.AniSeq.data.tr)
+                -- for _, ac in ipairs(finished) do
+                --     has_collapse = Collapse(ac.target.tc, ac.target.tr)
+                -- end
+                if not has_collapse then
+                    UpdateNext()
+                end
             end
         end
     end
