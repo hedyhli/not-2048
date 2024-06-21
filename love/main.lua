@@ -739,7 +739,11 @@ function RecalculateDimensions()
 
     if Md and Md.NextCell then
         local cell = Md.NextCell
-        cell.row = fullH - NextTileWidth - FontHeight
+        local bot_space = fullH - Columns.bot
+        local needs_height = FontHeight * 5 + NextTileWidth
+        -- Middle of bottom space - "messages" - "spacing" between it and next
+        -- then - next height
+        cell.row = Columns.bot + math.floor(bot_space / 2 + needs_height / 2) - FontHeight * 3
         cell.col = math.floor(fullW / 2) - math.floor(NextTileWidth / 2)
     end
 end
@@ -1148,8 +1152,7 @@ function love.draw()
     local _, _, fullW, _ = love.window.getSafeArea()
 
     love.graphics.setColor(.7, .7, .7)
-    row = row + FontHeight + math.floor(NextTileWidth / 2)
-    love.graphics.printf(Message, 0, row, fullW, "center")
+    love.graphics.printf(Message, 0, Md.NextCell.row - FontHeight * 3, fullW, "center")
 
     love.graphics.printf("- Next -", 0, Md.NextCell.row - FontHeight, fullW, "center")
     Cell.draw_next(Md.NextCell)
