@@ -1,15 +1,3 @@
--- TODO:
--- X Rewrite entrance anim
--- X Set AniCell.delta intelligently
--- - Check either left or right horizontal collapse
--- - Check both collapse
--- - Profit!
-
--- Global:
---   Grid, GetTile
--- Model:
---   AniMove
---   AniEntrance
 
 ---@alias tileValue integer Positive power of 2
 ---@alias rgb number[] Float, fraction fof 255
@@ -666,10 +654,6 @@ function love.load()
 
     ---@param col integer
     function InsertTileAt(col)
-        if State == "end" then
-            Message = "Game is already over. Get over it!"
-            return
-        end
         if Md.AniEntrance.active or Md.AniSeq.active then
             Message = "Please wait for animation to finish"
             return
