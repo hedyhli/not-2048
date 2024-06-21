@@ -16,7 +16,7 @@ function love.conf(t)
     -- 90: tile width
     -- 5: number of columns of tiles
     t.window.width = 510 -- 5 * (10 + 90) + 10
-    t.window.height = 650
+    t.window.height = 750
     t.window.borderless = false         -- Remove all border visuals from the window (boolean)
     t.window.resizable = true           -- Let the window be user-resizable (boolean)
     t.window.minwidth = 150             -- Minimum window width if the window is resizable (number)

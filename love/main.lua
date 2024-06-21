@@ -739,10 +739,8 @@ function RecalculateDimensions()
 
     if Md and Md.NextCell then
         local cell = Md.NextCell
-        local row = Columns.bot + FontHeight
-        local next_width = Font:getWidth("Next: ")
-        cell.row = row
-        cell.col = next_width + math.floor(NextTileWidth / 2)
+        cell.row = fullH - NextTileWidth - FontHeight
+        cell.col = math.floor(fullW / 2) - math.floor(NextTileWidth / 2)
     end
 end
 
@@ -765,7 +763,7 @@ function love.load()
 
     RecalculateDimensions()
 
-    Message = "Press a number key 1 to 5"
+    Message = "Choose a column to put each tile."
     ---@type "begin"|"animating"|"end"
     State = "begin"
     Count = 0
@@ -961,7 +959,7 @@ function love.load()
         -- INFO: Use this for quickly producing large tiles for debugging.
         -- NextTileValue = cap
         Md.NextCell.tile = Tile.get(NextTileValue)
-        Md.AniNext:start()
+        -- Md.AniNext:start()
     end
 
     ---@param tc integer
@@ -995,10 +993,13 @@ function love.load()
 end
 
 function love.update(_)
+    State = "begin"
     if Md.AniNext.active then
         local done = Md.AniNext:next()
         if done then
             Md.AniNext:finish()
+        else
+            State = "animating"
         end
     end
     if Md.AniEntrance.active then
@@ -1008,6 +1009,8 @@ function love.update(_)
             if not Collapse(Md.AniEntrance.target.tc, Md.AniEntrance.target.tr) then
                 UpdateNext()
             end
+        else
+            State = "animating"
         end
     end
     if Md.AniSeq.active then
@@ -1023,6 +1026,8 @@ function love.update(_)
                     UpdateNext()
                 end
             end
+        else
+            State = "animating"
         end
     end
 end
@@ -1125,19 +1130,29 @@ function love.draw()
     end
     local row = (TileGap + TileWidth) * ROWS
 
-    if Count == ROWS ^ 2 and State ~= "end" then
-        State = "end"
-        -- Avoids overwriting new messages on top
-        -- Message = "GAME OVER"
+    if Count == ROWS ^ 2 and State ~= "animating" then
+        local can_phew = false
+        for tc = 1, ROWS do
+            if Grid[GridTops[tc]-1][tc].tile.value == NextTileValue then
+                can_phew = true
+            end
+        end
+        if not can_phew then
+            State = "end"
+            -- Avoids overwriting new messages on top
+            Message = "GAME OVER"
+        end
     end
 
     --[[ Next & messages ]]--
+    local _, _, fullW, _ = love.window.getSafeArea()
 
-    love.graphics.setColor(1, 1, 1)
+    love.graphics.setColor(.7, .7, .7)
     row = row + FontHeight + math.floor(NextTileWidth / 2)
-    love.graphics.print("Next: ", Margins, row)
-    row = row + Cell.draw_next(Md.NextCell)
-    love.graphics.print(Message, Margins, row)
+    love.graphics.printf(Message, 0, row, fullW, "center")
+
+    love.graphics.printf("- Next -", 0, Md.NextCell.row - FontHeight, fullW, "center")
+    Cell.draw_next(Md.NextCell)
 
     --[[ Debug info ]]--
 
@@ -1163,7 +1178,7 @@ function love.mousereleased(col, row, button, _, _)
         return
     end
     if row < Columns.top or row > Columns.bot then
-        Message = "Mouse out of range"
+        Message = "Touch out of range"
         return
     end
     local tc = 0
@@ -1176,6 +1191,6 @@ function love.mousereleased(col, row, button, _, _)
     if tc ~= 0 then
         InsertTileAt(tc)
     else
-        Message = "Mouse out of range"
+        Message = "Try again"
     end
 end
