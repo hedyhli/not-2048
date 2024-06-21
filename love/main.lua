@@ -373,15 +373,18 @@ end
 ---@return boolean done
 function AniEnlarge:next()
     self.cell.enlarge = self.cell.enlarge + self.delta
-    if self.cell.enlarge > 3 then
+    if self.cell.enlarge > 4 then
         self.delta = - self.delta
     end
     if self.cell.enlarge < 0 then
-        self.cell.enlarge = 0
-        self.active = false
         return true
     end
     return false
+end
+
+function AniEnlarge:finish()
+    self.cell.enlarge = 0
+    self.active = false
 end
 
 
@@ -582,7 +585,9 @@ function love.update(_)
     end
     if Md.AniEnlarge.active then
         if Md.AniEnlarge:next() then
-            local has_collapse = Collapse(Md.AniMove.final.tc, Md.AniMove.final.tr)
+            local cell = Md.AniEnlarge.cell
+            Md.AniEnlarge:finish()
+            local has_collapse = Collapse(cell.tc, cell.tr)
             -- for _, ac in ipairs(finished) do
             --     has_collapse = Collapse(ac.target.tc, ac.target.tr)
             -- end
