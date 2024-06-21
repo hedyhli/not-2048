@@ -214,29 +214,24 @@ function AniCell:next()
     return false
 end
 
+---@class Ani
+---@field active boolean
+---@field next fun(self: Ani): boolean
+---@field finish fun(self: Ani): any
+
 ---@type AniMove A merge-tile animation for collapses. SINGLETON
 local AniMove = {}
 
----@class AniMove
+---@class AniMove: Ani
 ---@field anim_cells AniCell[] Animation information
 ---@field final Cell The final state of the `Cell` which the `cells` have merged into.
 ---@field new_tile Tile The tile to put into the `final` Cell after animation finishes
 ---@field active boolean Whether animation is running and should call `:next`
 
----Create the single AniMove instance to be used throughout the game.
-function AniMove:new()
-    return setmetatable({
-        anim_cells = {},
-        final = nil,
-        new_tile = nil,
-        active = false,
-    }, { __index = AniMove })
-end
-
 ---@param sources Coord[]
 ---@param final Cell
 ---@param new_tile Tile
-function AniMove:init(sources, final, new_tile)
+function AniMove:new(sources, final, new_tile)
     local dest_coord = {tr = final.tr, tc = final.tc}
 
     ---@type AniCell[]
@@ -245,10 +240,12 @@ function AniMove:init(sources, final, new_tile)
         table.insert(anim_cells, AniCell:new(src_coord, dest_coord))
     end
 
-    self.anim_cells = anim_cells
-    self.final = final
-    self.new_tile = new_tile
-    self.active = true
+    return setmetatable({
+        anim_cells = anim_cells,
+        final = final,
+        new_tile = new_tile,
+        active = true,
+    }, { __index = AniMove })
 end
 
 ---@return boolean done Whether this animation set is fully complete.
@@ -351,23 +348,18 @@ end
 ---@type AniEnlarge
 local AniEnlarge = {}
 
----@class AniEnlarge
+---@class AniEnlarge: Ani
 ---@field cell Cell
 ---@field active boolean
 ---@field delta number
 
-function AniEnlarge:new()
+---@param cell Cell
+function AniEnlarge:new(cell)
     return setmetatable({
-        cell = nil,
-        active = false,
-        delta = 0,
+        cell = cell,
+        active = true,
+        delta = 1,
     }, { __index = AniEnlarge })
-end
-
-function AniEnlarge:init(cell)
-    self.cell = cell
-    self.active = true
-    self.delta = 1
 end
 
 ---@return boolean done
@@ -384,6 +376,54 @@ end
 
 function AniEnlarge:finish()
     self.cell.enlarge = 0
+    self.active = false
+end
+
+---@type AniSeq
+local AniSeq = {}
+
+---@class AniSeq: Ani
+---@field active boolean
+---@field seq Ani[] No two happen simultaneously
+---@field data any
+
+function AniSeq:new()
+    return setmetatable({
+        active = false,
+        seq = {}
+    }, { __index = AniSeq })
+end
+
+---Initialize the animation sequence of a vertical collapse
+---@param sources Coord[]
+---@param to Cell
+---@param new_tile Tile
+function AniSeq:init_vert(sources, to, new_tile, data)
+    self.seq = {
+        AniMove:new(sources, to, new_tile),
+        AniEnlarge:new(to),
+    }
+    self.active = true
+    self.data = data
+end
+
+---@return boolean done
+function AniSeq:next()
+    local done = false
+    for _, ani in ipairs(self.seq) do
+        done = not ani.active
+        if ani.active then
+            if ani:next() then
+                ani:finish()
+            else
+                break
+            end
+        end
+    end
+    return done
+end
+
+function AniSeq:finish()
     self.active = false
 end
 
@@ -474,8 +514,7 @@ function love.load()
     --[[ Model ]]--
     -- Model. Structure of globals that might change.
     Md = {
-        AniMove = AniMove:new(),
-        AniEnlarge = AniEnlarge:new(),
+        AniSeq = AniSeq:new(),
         -- TODO
         AniEntrance = AniEntrance:new(),
         Next = 0,
@@ -512,7 +551,7 @@ function love.load()
             MaxTileValue = math.max(MaxTileValue, new_tile.value)
             GridTops[tc] = GridTops[tc] - 1
 
-            Md.AniMove:init({{tr = tr, tc = tc}}, up, new_tile)
+            Md.AniSeq:init_vert({{tr = tr, tc = tc}}, up, new_tile, up)
             return true
         end
         return false
@@ -533,7 +572,7 @@ function love.load()
             Message = "Game is already over. Get over it!"
             return
         end
-        if State == "animating" or Md.AniMove.active then
+        if Md.AniEntrance.active or Md.AniSeq.active then
             Message = "Please wait for animation to finish"
             return
         end
@@ -568,26 +607,11 @@ function love.update(_)
             end
         end
     end
-    if Md.AniMove.active then
-        local done = Md.AniMove:next()
+    if Md.AniSeq.active then
+        local done = Md.AniSeq:next()
         if done then
-            -- Several AniMoves or singleton?
-            -- CONFLICT:
-            -- :finish() sets new_tile to AniMove.final Cell
-            -- - Horizontal merges can trigger multiple subsequent merges
-            -- - Left might have a merge going on at the same time as a right
-            --   merge. Should they each have a :finish()?
-            --   Because now Left will have a different new_tile/final than
-            --   Right.
-            local _ = Md.AniMove:finish()
-            Md.AniEnlarge:init(Md.AniMove.final)
-        end
-    end
-    if Md.AniEnlarge.active then
-        if Md.AniEnlarge:next() then
-            local cell = Md.AniEnlarge.cell
-            Md.AniEnlarge:finish()
-            local has_collapse = Collapse(cell.tc, cell.tr)
+            Md.AniSeq:finish()
+            local has_collapse = Collapse(Md.AniSeq.data.tc, Md.AniSeq.data.tr)
             -- for _, ac in ipairs(finished) do
             --     has_collapse = Collapse(ac.target.tc, ac.target.tr)
             -- end
