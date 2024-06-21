@@ -126,6 +126,8 @@ local Cell = {}
 ---@class Cell
 ---@field row integer Position
 ---@field col integer Position
+---@field o_r integer Offset for animations
+---@field o_c integer Off set for animations
 ---@field tr integer Coords
 ---@field tc integer Coords
 ---@field enlarge number Pixels added onto widths
@@ -143,6 +145,8 @@ function Cell:new(tile, coord, pos)
         row = pos.row,
         col = pos.col,
         enlarge = 0,
+        o_r = 0,
+        o_c = 0,
     }, { __index = Cell })
 end
 
@@ -214,9 +218,9 @@ local AniCell = {}
 
 ---@class AniCell
 ---@field target Cell Reference to Grid[coord.tr][coord.tc]. The cell to be modified
----@field dest Position Destination Cell.row+col (SHOULD BE IMMUTABLE)
----@field initial Position
----@field delta {dr: integer, dc: integer} Added to row/col of `dest` (NOT coords)
+---@field dest Cell Destination Cell.row+col (AniCell does not change it,
+--but it should be changed outside of AniCell during window resize!)
+---@field delta {dr: integer, dc: integer} Added to o_r, o_c of `target`
 ---@field done boolean
 
 ---Create an AniCell instance using from and to coords.
@@ -228,7 +232,7 @@ function AniCell:new(coord, dest_coord)
     local target = Grid[coord.tr][coord.tc]
     local delta = {dr = 0, dc = 0}
 
-    local mag = 7
+    local mag = math.floor(TileWidth / 15)
 
     if dest.col ~= target.col then
         local diff = dest.col - target.col
@@ -241,8 +245,7 @@ function AniCell:new(coord, dest_coord)
 
     return setmetatable({
         target = target,
-        dest = {row = dest.row, col = dest.col},
-        initial = {row = target.row, col = target.col},
+        dest = dest,
         delta = delta,
         done = false,
     }, { __index = AniCell })
@@ -253,23 +256,24 @@ end
 ---@return boolean ended Animation has ended
 function AniCell:next()
     local dr, dc = self.delta.dr, self.delta.dc
-    local nrow, ncol = self.target.row + dr, self.target.col + dc
+    local new_or, new_oc = self.target.o_r + dr, self.target.o_c + dc
+    local new_row, new_col = self.target.row + new_or, self.target.col + new_oc
 
-    if dr > 0 and (nrow > self.dest.row) then
+    if dr > 0 and (new_row > self.dest.row) then
         return true
     end
-    if dr < 0 and (nrow < self.dest.row) then
+    if dr < 0 and (new_row < self.dest.row) then
         return true
     end
-    if dc > 0 and (ncol > self.dest.col) then
+    if dc > 0 and (new_col > self.dest.col) then
         return true
     end
-    if dc < 0 and (ncol < self.dest.col) then
+    if dc < 0 and (new_col < self.dest.col) then
         return true
     end
 
-    -- Move it!
-    self.target.row, self.target.col = nrow, ncol
+    -- Apply new offset
+    self.target.o_r, self.target.o_c = new_or, new_oc
     return false
 end
 
@@ -283,7 +287,7 @@ local AniMove = {}
 
 ---@class AniMove: Ani
 ---@field anim_cells AniCell[] Animation information
----@field final Cell The final state of the `Cell` which the `cells` have merged into.
+---@field final Cell The `Cell` which the `anim_cells` have merged into.
 ---@field new_tile Tile The tile to put into the `final` Cell after animation finishes
 ---@field active boolean Whether animation is running and should call `:next`
 
@@ -343,8 +347,8 @@ function AniMove:finish()
     for k, ac in pairs(self.anim_cells) do
         if ac.done then
             ac.target.tile = Tile:new(0, {})
-            ac.target.row = ac.initial.row
-            ac.target.col = ac.initial.col
+            ac.target.o_r = 0
+            ac.target.o_c = 0
             table.insert(finished, ac)
             table.insert(finished_keys, k)
         end
@@ -359,7 +363,6 @@ end
 local AniEntrance = {}
 
 ---@class AniEntrance
----@field dest Position Destination position
 ---@field target Cell The actual cell (reference) that is moved
 ---@field active boolean
 
@@ -374,12 +377,10 @@ end
 
 ---@param cell Cell To be inserted
 function AniEntrance:init(cell)
-    local dest = {row = cell.row, col = cell.col}
     local target = cell
     -- Position of bottomost cell + half of tilewidth further bottom.
-    target.row = Grid[cell.tr][ROWS].col + math.floor(TileWidth / 2)
+    target.o_r = Columns.bot - math.floor(TileWidth / 2) - target.row
 
-    self.dest = dest
     self.target = target
     self.active = true
     State = "animating"
@@ -388,20 +389,20 @@ end
 ---Client responsible for calling `:finish()` if done
 ---@return boolean done
 function AniEntrance:next()
-    local nrow = self.target.row - 40
-    if nrow < self.dest.row then
+    local new_or = self.target.o_r - math.floor(TileWidth / 2)
+    if new_or < 0 then
         return true
     end
-    self.target.row = nrow
+    self.target.o_r = new_or
     return false
 end
 
 function AniEntrance:finish()
     self.active = false
-    self.target.row = self.dest.row
+    self.target.o_r = 0
     -- HACK: Not sensibly resetting to previous values
     State = "begin"
-    Message = "yay"
+    Message = ""
 end
 
 ---@type AniEnlarge
@@ -909,25 +910,25 @@ function love.load()
         -- Next = cap
     end
 
-    ---@param col integer
-    function InsertTileAt(col)
+    ---@param tc integer
+    function InsertTileAt(tc)
         if Md.AniEntrance.active or Md.AniSeq.active then
             Message = "Please wait for animation to finish"
             return
         end
 
-        local row = GridTops[col]
-        if row <= ROWS then
-            Grid[row][col].tile = Tile.get(NextTileValue)
-            GridTops[col] = row + 1
+        local tr = GridTops[tc]
+        if tr <= ROWS then
+            Grid[tr][tc].tile = Tile.get(NextTileValue)
+            GridTops[tc] = tr + 1
             -- Defers collapsing & updating next to after animation finishes.
             -- See `love.update`.
-            Md.AniEntrance:init(Grid[row][col])
-            Message = "Yay"
+            Md.AniEntrance:init(Grid[tr][tc])
+            Message = ""
         else
-            if Grid[ROWS][col].tile.value == NextTileValue then
-                Grid[ROWS][col].tile = Tile.get(NextTileValue * 2)
-                Collapse(col, ROWS)
+            if Grid[ROWS][tc].tile.value == NextTileValue then
+                Grid[ROWS][tc].tile = Tile.get(NextTileValue * 2)
+                Collapse(tc, ROWS)
                 Message = "Phew!"
             else
                 Message = "Row is full and incollapsible!"
@@ -968,14 +969,28 @@ function Cell:draw()
     local tile = self.tile
     local width = TileWidth + 2 * self.enlarge
     local tile_padding_top = math.floor(TileWidth / 2 - TileFontHeight / 2)
-    local text_row = self.row + tile_padding_top
+    local text_row = self.row + self.o_r + tile_padding_top
     local radius = width / 8
 
     love.graphics.setColor(unpack(tile.bg))
-    love.graphics.rectangle("fill", self.col - self.enlarge, self.row - self.enlarge, width, width, radius)
+    love.graphics.rectangle(
+        "fill",
+        self.col + self.o_c - self.enlarge,
+        self.row + self.o_r - self.enlarge,
+        width,
+        width,
+        radius
+    )
 
     love.graphics.setColor(unpack(tile.fg))
-    love.graphics.printf(tile.text, TileFont, self.col, text_row, TileWidth, "center")
+    love.graphics.printf(
+        tile.text,
+        TileFont,
+        self.col + self.o_c,
+        text_row,
+        TileWidth,
+        "center"
+    )
 end
 
 function love.draw()
@@ -1020,6 +1035,7 @@ function love.draw()
 
     --[[ Debug info ]]--
 
+    row = row + FontHeight
     love.graphics.setColor(1, 1, 1)
     local col = Margins
     for x = 1, ROWS do
@@ -1041,8 +1057,6 @@ function love.keypressed(key)
     local col = tonumber(key)
     if col and col > 0 and col <= ROWS then
         InsertTileAt(col)
-    else
-        Message = "Invalid key lol, try harder"
     end
 end
 
