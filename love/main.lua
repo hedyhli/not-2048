@@ -1,6 +1,6 @@
 -- TODO:
 -- X Rewrite entrance anim
--- - Set AnimCell.delta intelligently
+-- X Set AnimCell.delta intelligently
 -- - Check either left or right horizontal collapse
 -- - Check both collapse
 -- - Profit!
@@ -163,13 +163,26 @@ local AnimCell = {}
 ---@param coord Coord Current position
 ---@param dest_coord Coord Destination position
 function AnimCell:new(coord, dest_coord)
-    local dest_cell = Grid[dest_coord.tr][dest_coord.tc]
+    local dest = Grid[dest_coord.tr][dest_coord.tc]
     local target = Grid[coord.tr][coord.tc]
+    local delta = {dr = 0, dc = 0}
+
+    local mag = 7
+
+    if dest.col ~= target.col then
+        local diff = dest.col - target.col
+        delta.dc = diff < 0 and -mag or mag
+    end
+    if dest.row ~= target.row then
+        local diff = dest.row - target.row
+        delta.dr = diff < 0 and -mag or mag
+    end
+
     return setmetatable({
         target = target,
-        dest = {row = dest_cell.row, col = dest_cell.col},
+        dest = {row = dest.row, col = dest.col},
         initial = {row = target.row, col = target.col},
-        delta = {dr = -10, dc = 0},
+        delta = delta,
         done = false,
     }, { __index = AnimCell })
 end
@@ -294,7 +307,7 @@ end
 ---Client responsible for calling `:finish()` if done
 ---@return boolean done
 function AnimEntrance:next()
-    local nrow = self.target.row - 30
+    local nrow = self.target.row - 40
     if nrow < self.dest.row then
         return true
     end
