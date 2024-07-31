@@ -4,8 +4,8 @@ This is not 2048.
 
 Just me attempting to "clone" a game I found to remove the ads.
 
-This is legal, because none of my implementations can come close to being as
-good as the original.
+Rest assured, none of my implementations can come close to being as good as the
+original.
 
 Look how crude it is right now:
 
@@ -35,8 +35,5 @@ implementing it myself, but also [learn a whole bunch of other languages &
 frameworks](https://github.com/hedyhli/todomvc-tui) along the way.
 
 
-[^1]: I found this use of the word quite intriguing. It's to be credited to:
-[This article about Rust & Vlang community
-drama](https://web.archive.org/web/20231122124218/http://asvln.com/rants/pathetic.html)
-which ThePrimeagen has a reaction video of, who has also gave some emphasis to
-the word in his "analyses".
+[^1]: My use of this word is inspired by [This article about the Rust & Vlang
+community drama](https://web.archive.org/web/20231122124218/http://asvln.com/rants/pathetic.html)
