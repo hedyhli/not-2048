@@ -232,7 +232,7 @@ function AniCell:new(coord, dest_coord)
     local target = Grid[coord.tr][coord.tc]
     local delta = {dr = 0, dc = 0}
 
-    local mag = math.floor(TileWidth / 15)
+    local mag = AniCellMoveBy
 
     if dest.col ~= target.col then
         local diff = dest.col - target.col
@@ -760,6 +760,7 @@ function love.load()
     -- Game Params
     ROWS = 5
     TileGap = 10
+    AniCellMoveBy = 4
     ---@type tileValue
     NextTileValue = 2
     ---@type tileValue
